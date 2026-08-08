@@ -1,0 +1,48 @@
+📋 Yêu Cầu Chỉnh Sửa Trang Web
+Tên dự án: Công ty cổ phần nước BIWASE - Long An
+________________________________________
+1. Yêu Cầu Chung (Áp dụng toàn hệ thống)
+•	Tài khoản Admin: Cần thiết lập một tài khoản chính để duy trì đăng nhập. Tài khoản này phải có đầy đủ toàn bộ chức năng và tuyệt đối không bao giờ được phép xóa.
+•	Tên công ty: Cập nhật đồng loạt thành "Công ty cổ phần nước BIWASE - Long An" ở cả Trang đăng nhập và Trang chính.
+•	Kiểu chữ (Font): Đồng bộ sử dụng font Roboto cho toàn bộ Trang đăng nhập và Trang chính.
+•	Tối ưu Đa nền tảng (Responsive): Cân đối giao diện để hiển thị tối ưu và không bị lỗi trên cả thiết bị điện thoại lẫn máy tính.
+•	Ghi chú Code (Comments): Phải viết chú thích chi tiết trong source code (đặc biệt ở Trang đăng nhập và thanh Tab bên trái của Trang chính) để công ty và giáo viên dễ dàng đọc hiểu, thay đổi hoặc chỉnh sửa sau này.
+________________________________________
+2. Trang Đăng Nhập
+•	Logo: Phóng to kích thước logo lên một chút để dễ nhìn hơn.
+•	Chữ dưới Logo: Di chuyển dòng chữ lên phía trên một chút để thấy rõ hơn, tránh bị hiệu ứng nước che khuất.
+•	Trang trí hiển thị: Ở góc bên trái màn hình, bổ sung tính năng hiển thị thời tiết tại khu vực và ngày tháng năm.
+________________________________________
+3. Trang Chính
+•	Menu phụ: Khi bấm vào từng trang phụ, cần xóa/ẩn các dòng chữ nhỏ ở dưới (những dòng chữ không mô tả chức năng của trang).
+•	Thanh Menu trái (Tab): Đổi màu thanh Tab bên tay trái. Cần thiết kế lại cho đẹp mắt, nhìn rõ ràng và có màu sắc sinh động hơn.
+________________________________________
+4. Trang Quản Lý Kho
+•	Giao diện Tab nhập kho: Xử lý bo tròn viền góc bên phải của Tab nhập kho để đồng bộ với góc bên trái đã được bo tròn.
+•	Ô nhập liệu (Placeholder): Khi chưa nhập chữ, ô nhập liệu chỉ được hiện dấu cách, không hiển thị chữ. Đối với ô nhập thông số, khi chưa có dữ liệu thì không được hiển thị số "0" (cần xử lý logic hiển thị ở điểm này).
+•	Tính năng ảnh sản phẩm: Trong mục Nhập kho, thêm một trường dữ liệu (nằm dưới mục khối lượng) để cho phép gắn/tải lên hình ảnh của sản phẩm.
+________________________________________
+5. Trang Tồn Kho
+•	Bảng hiển thị: Bảng cần có các cột: Số thứ tự, Mã hàng, Tên hàng, Số lượng, Thông tin, Thao tác, Xóa.
+•	Cột Thông tin: Thiết kế dưới dạng nút bấm, khi click vào sẽ hiển thị chi tiết thông tin của sản phẩm đó.
+•	Cột Thao tác: Chỉ hiển thị cho tài khoản có quyền "Tồn kho". Tài khoản này được phép chỉnh sửa thông tin (Ví dụ: thay đổi ảnh, trọng lượng) nhưng tuyệt đối không được thay đổi số lượng.
+•	Cột Xóa: Nút xóa sản phẩm được thiết kế bằng biểu tượng hình giỏ rác.
+•	Tab thông tin sản phẩm (Popup): Cần mở rộng khung hiển thị sao cho cân đối, chứa đủ toàn bộ thông tin sản phẩm và bổ sung thêm hình ảnh sản phẩm. Cần bo cong các góc và trang trí khung viền cho đẹp mắt.
+________________________________________
+6. Trang Lịch Sử Kho
+•	Bảng hiển thị: Cân đối layout sao cho hiển thị đầy đủ tất cả các cột: Ngày/tháng/năm, Thời gian, Họ và tên (của tài khoản thực hiện), Kho lưu, Mã sản phẩm, Tên sản phẩm, Chức năng, Thông tin chức năng.
+•	Cột Chức năng: Hiển thị hành động thao tác của tài khoản đó (Ví dụ: Nhập kho, Xuất kho, Tồn kho).
+•	Cột Thông tin chức năng: Cần hiển thị chi tiết dữ liệu thao tác. Cụ thể là số lượng nhập/xuất kho bao nhiêu, hoặc tài khoản có chức năng "tồn kho" đã thực hiện chỉnh sửa những thông tin gì.
+________________________________________
+7. Trang Tài Khoản
+•	Hiển thị User đang đăng nhập: Tại khu vực góc hiển thị User (nằm trên nút đăng xuất), cần hiển thị đầy đủ Họ và tên của tài khoản đó.
+•	Tab thêm tài khoản mới: Khi vào màn hình tạo tài khoản, các ô "Tên đăng nhập" và "Mật khẩu" phải được để trống hoàn toàn (không hiển thị ký tự mặc định).
+•	Chức năng phân quyền: Chuyển đổi giao diện chọn quyền từ dạng chọn một (radio) sang dạng ô vuông tích chọn (checkbox). Mục đích để một tài khoản có thể đảm nhận 2-3 chức năng cùng một lúc.
+•	Bổ sung quyền mới: Thêm một quyền là "Quản lý nhân sự" để cho phép tài khoản thêm thông tin nhân viên.
+________________________________________
+8. Trang Quản Lý Nhân Sự
+•	Trường dữ liệu hồ sơ (Input): Thiết lập tính năng nhập và hiển thị thông tin nhân viên bao gồm: Họ và tên, Ngày tháng năm sinh, Giới tính, CCCD, Ngày cấp - Nơi cấp, Ngày vào thử việc, Ngày làm việc chính thức, Ngày tới hạn hợp đồng, Loại HĐ (chính thức, thử việc, cộng tác...), Trình độ, Chuyên ngành, Trường đào tạo, Năm tốt nghiệp, Địa chỉ, Tuổi, Thâm niên.
+•	Hệ thống cảnh báo: Cần có tính năng thông báo/báo động để nhận biết khi nào một nhân viên sắp hết hạn hợp đồng.
+•	Đồng bộ tài khoản: Dữ liệu hồ sơ nhân sự phải được đồng bộ hóa với hệ thống tài khoản. Khi nhân viên đăng nhập, họ phải xem được chính xác trang thông tin cá nhân của bản thân mình.
+•	Góc nhìn Quản lý: Thêm một cột "Thông tin" trong bảng danh sách nhân sự, để khi cấp trên cần xem, họ chỉ việc bấm vào cột đó là thấy được chi tiết hồ sơ của từng nhân viên.
+

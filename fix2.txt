@@ -1,0 +1,32 @@
+Lỗi và cần cập nhật.
+1/ Trang thông tin nhân viên:
+
+- Thêm vào 1 ô trống bự để hiển thị thông tin ghi chú thêm.(ô ghi chú)
+
+2/ Trang quản lý kho:
+
+- Mục nhập kho cần cải thiện lại ô khối lượng có thể điều chỉnh được nhiều đơn vị như chai, lít , gram, ml...
+ ( 1 là tạo thêm ô để đánh đơn vị,2 là cài ô sổ xuống để chọn tên đơn vị cần dung)
+ 
+- Mục nhập kho tên hàng và mã hàng những lần nhập sau không được trùng với những cái đã có. (Ví dụ trong kho đã có mã 001 rồi thì không được nhập nữa nó phải bảo đỏ)
+
+- Nút nhập kho chỉ cài bấm 1 lần là tắt cái tab đó luôn để khỏi lên nhiều sản phẩm.
+
+- Ở trang quản lý kho này phải làm thêm nút nhập thêm khi bấm nút đó sẽ hiện hiện ra ô tìm kiếm rồi đánh những mã sản phẩm đã có sẵn trong kho nhằm tăng thêm số số lượng của mã sản phẩm đó (Nút nhập thêm này người có chức năng nhập kho mới sử dụng)
+
+3/ Trang tồn kho:
+
+- Trong quá trình sử dụng lâu lâu cập nhật lại thông tin sản phẩm thì không thay đổi.
+
+4/ Trang lịch sử kho:
+
+- Chế độ hiển thị gần nhất sẽ hiện từ trên xuống (Hiện tại đang hiện từ dưới lên)
+
+- Cần thêm 3 bộ lọc: Bộ lọc theo mã sản phẩm
+                     Bộ lọc theo tên sản phẩm 
+                     Bộ lọc theo Chức năng     Vi dụ như: Nhập kho, xuất kho, tồn kho
+5/ Trang tài khoản:
+
+- Trong mục Thêm tài khoản phải có thêm ô ghi chú để đánh thêm vào.
+- Ô đó là có thể ghi nhiều.
+- Ô đó sẽ hiển thị thông tin ghi chú ở trang thông tin nhân viên.

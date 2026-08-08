@@ -1,0 +1,24 @@
+1/ Trang đăng nhập.
+- Anh dời dòng chữ bên phải lên cao dùm em ( có note trong file Excel ) đừng để hiệu ứng nước che.
+2/ Trang thông tin nhân viên.
+- Thêm vào dùm em một mục hiển thị số điện thoại đồng thời ở mục thêm nhân viên trong trang quản lý nhân sự cũng phải có ô nhập số điện thoại.
+3/ Trang quản lý kho. 
+- Những người có chức năng nhập kho mới hiện nút còn không thì không có.
+- Những người có chức năng xuất kho mới hiện nút còn không thì không có.
+- Lúc mà nhấn vào nút nhập kho thì tab nhập kho hiện lên, lúc này chưa nhập thông số có những chữ nó hiện ra mấy chữ đó anh xóa hết giúp em ạ.
+VD: ô Mã hàng hiện (VD:VT001), ô Tên hàng hiện (Nhập tên hàng)...... Anh xóa giúp em mấy dòng chữ ạ.
+- Ô nhập số lượng và những ô nhập số: lúc nhập số ban đầu số 22 sau đó ta thấy sai ta xóa hết thì xóa còn dư lại số không cái ta nhập tiếp số 33 thì ở ô hiện thị lúc này là 033 xóa số không ở trước đi không được anh chỉnh lại chỗ đó giúp em.
+- Ô nhập giá của sản phẩm anh có thể cho ô đó điền dấu chấm để kế toán ta bấm 5.000 là 5 nghìn đồng vậy cho dễ chứ không có dấu dễ nhàm anh cho thêm dấu nặng thôi nha anh. Tương tự như vậy đối với ô giá nhập và giá xuất và trọng lượng đều chỉ dùng dấu nặng.
+- Hiện tại chức năng nhập kho mà không có hình ảnh thì sử dụng được, còn nhập kho có sử dụng hình ảnh thì không được.
+- Cái ô kho phòng thí nghiệm thì nó màu tím, nhưng qua trang tồn kho thì màu khác anh chỉnh lại thành màu tím giúp em luôn.
+4/ Trang tồn kho.
+- Anh chỉnh lại chức năng cho chuẩn những người có chức có chức năng xem thông tin cơ bản vẫn vào xem được cũng như bấm vào nút xem thông tin sản phẩm.
+- Những người có chức năng tồn kho mới được thao tác và xóa sản phẩm. 
+5/ Trang quản lý nhân sự.
+- Những người có chức năng xem thông tin cơ bản không thể bấm vào xem thông tin, thao tác,xóa. Nhưng vẫn có thể xem danh sách công ty có bao nhiêu người.
+- Chỉ có những người có chức năng quản lý nhân sự mới được xem thông tin và xóa, thao tác.
+6/ Trang thêm tài khoản.
+- Chỉ những người có chức năng tài khoản mới có thể thao tác và xóa tài khoản.
+
+Tóm tắt hiện tại chức năng tài khoản còn chưa đúng cần chỉnh sửa lại kỹ.
+Lâu lâu đang sử dụng thì load lại thì nó báo màn hình Application error.

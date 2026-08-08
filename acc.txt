@@ -1,0 +1,7 @@
+const DEMO_ACCOUNTS = [
+  { username: 'kho', password: 'password123', role: 'Nhân viên kho', name: 'Nguyễn Văn A' },
+  { username: 'hr', password: 'password123', role: 'Nhân viên nhân sự', name: 'Trần Thị B' },
+  { username: 'ketoan', password: 'password123', role: 'Kế toán', name: 'Lê Văn C' },
+  { username: 'truongphong', password: 'password123', role: 'Trưởng phòng', name: 'Phạm Thị D' },
+  { username: 'giamdoc', password: 'password123', role: 'Giám đốc', name: 'Đặng Văn E' },
+]

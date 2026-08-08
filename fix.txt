@@ -1,0 +1,30 @@
+1/ Cần 1 tài khoản cố định không thể xóa được để duy trì đăng nhập tài khoản đó là tài khoản có tất cả chức năng.
+2/ Trang đăng nhập:
+    - Kiểu chữ dùng kiểu Robot.
+    - Logo kéo bự ra 1 chút xíu.
+    - Dời logo và dòng chữ cách mặt nước để thấy được chữ.
+    - Đổi tên lại: Công ty cổ phần nước BIWASE - LONG AN
+    
+3/ Trang chính:
+   - Chỉnh lại giao diện viền tab bên tay phải sao cho nhìn đẹp mắt hơn mềm mại hơn.
+   - Đổi tên lại: Công ty cổ phần nước BIWASE - LONG AN
+   - Kiểu chữ dùng kiểu Robot.
+   - Dưới mỗi tiêu đề thì xóa dòng chữ bỏ dòng chữ nhỏ luôn.
+4/ Mục quản lý kho khi nhấn nhập kho:
+    - Cần thêm 1 mục là hình ảnh của sản phẩm nằm dưới mục khối lượng thêm 1 mục để gắn hình ảnh sản phẩm.
+    - Cái Tab nhập kho đó anh bo viền tròn lại dùm em bên trái đã bo còn bên phải chưa bo.
+5/ Mục tồn kho:
+    - Cái thanh hiển thị thêm 2 mục hiện tại đang hiển thị:
+      Stt,mã hàng, tên hàng,số lượng,thông tin,thao tác,xóa.
+    - Cột thông tin là nút bấm vào để hiển thị thông tin của sản phẩm đó.
+    - Cột thao tác này chỉ dành cho tài khoản có chức năng tồn kho để họ vào chỉnh sửa thông tin của sản phẩm trong kho. Ví dụ như vào mục này thay đổi ảnh trọng lượng.
+     - Cột xóa sản phẩm hoặc hình giỏ rác là được.
+6/ Mục lịch sử kho:
+     - Anh cân đối sắp xếp kỹ ví dụ cột họ và tên rộng ra xíu.
+     - Mục này phải lưu được thời gian và ngày tháng năm từng tài khoản nhập kho, xuất kho và tồn kho đều ghi lại hiển thị ở mục này giống trong pp em có trình bày kỹ.
+     -  Nếu anh chưa rõ anh cứ gọi zalo cho em nha.
+7/Mục tài khoản nhấn vào thêm tài khoản thì tab hiện lên:
+- Lúc tab hiện lên ô tên đăng nhập và mật khẩu phải trống.
+- Ô nhập mật khẩu phải hiện mật khẩu lên luôn.
+8/ Cái ô đăng nhập như User thì chỗ đó để tên của người đăng nhập.
+9/ Anh có thể trang trí gì thêm cho trang web đẹp nữa được không.
