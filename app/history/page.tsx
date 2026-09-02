@@ -5,7 +5,8 @@ import { Sidebar } from '@/components/sidebar'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { History, Calendar, Search, X } from 'lucide-react'
+import { History, Calendar, Search, X, FileSpreadsheet } from 'lucide-react'
+import * as XLSX from 'xlsx'
 import { type HistoryEntry } from '@/lib/constants'
 import { getHistoryLog } from '@/lib/db'
 
@@ -73,6 +74,40 @@ export default function HistoryPage() {
     setFilterName('')
     setFilterWarehouse('')
     setFilterAction('Tất cả')
+  }
+
+  const handleExportExcel = () => {
+    const data = filteredHistory.map((entry, index) => ({
+      'STT': index + 1,
+      'Ngày': entry.date,
+      'Thời gian': entry.time,
+      'Họ và tên': entry.userName,
+      'Kho lưu': entry.warehouse,
+      'Mã SP': entry.productCode,
+      'Tên SP': entry.productName,
+      'Chức năng': entry.action,
+      'Thông tin': entry.details || `${entry.action} ${entry.quantity} sản phẩm`,
+    }))
+
+    const ws = XLSX.utils.json_to_sheet(data)
+
+    ws['!cols'] = [
+      { wch: 5 },
+      { wch: 14 },
+      { wch: 10 },
+      { wch: 20 },
+      { wch: 16 },
+      { wch: 14 },
+      { wch: 24 },
+      { wch: 12 },
+      { wch: 40 },
+    ]
+
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Lịch sử kho')
+
+    const fileName = `LichSuKho_${new Date().toLocaleDateString('vi-VN').replace(/\//g, '-')}.xlsx`
+    XLSX.writeFile(wb, fileName)
   }
 
   const getActionColor = (action: string) => {
@@ -172,9 +207,16 @@ export default function HistoryPage() {
           {/* History Table */}
           <Card className="border-l-4 border-l-orange-500">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-orange-600">
-                <History className="w-5 h-5" /> Lịch Sử Hoạt Động ({filteredHistory.length} bản ghi)
-              </CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2 text-orange-600">
+                  <History className="w-5 h-5" /> Lịch Sử Hoạt Động ({filteredHistory.length} bản ghi)
+                </CardTitle>
+                {filteredHistory.length > 0 && (
+                  <Button onClick={handleExportExcel} className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white cursor-pointer">
+                    <FileSpreadsheet className="w-4 h-4" /> Xuất Excel
+                  </Button>
+                )}
+              </div>
             </CardHeader>
             <CardContent className="p-6">
               <div className="overflow-x-auto">

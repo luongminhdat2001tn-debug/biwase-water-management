@@ -303,7 +303,7 @@ export default function InventoryPage() {
                   <div className="p-3 bg-gray-50 rounded-xl"><p className="text-sm text-gray-500 mb-1">Số lượng tồn</p><p className="font-bold text-green-600">{selectedProduct.quantity.toLocaleString()} {selectedProduct.unit}</p></div>
                   <div className="p-3 bg-gray-50 rounded-xl"><p className="text-sm text-gray-500 mb-1">Giá nhập</p><p className="font-medium">{selectedProduct.priceIn.toLocaleString('vi-VN')} đ</p></div>
                   <div className="p-3 bg-gray-50 rounded-xl"><p className="text-sm text-gray-500 mb-1">Giá xuất</p><p className="font-medium">{selectedProduct.priceOut.toLocaleString('vi-VN')} đ</p></div>
-                  <div className="p-3 bg-gray-50 rounded-xl"><p className="text-sm text-gray-500 mb-1">Trọng lượng</p><p className="font-medium">{selectedProduct.weight} kg</p></div>
+                  <div className="p-3 bg-gray-50 rounded-xl"><p className="text-sm text-gray-500 mb-1">Khối lượng</p><p className="font-medium">{selectedProduct.weight} {selectedProduct.weightUnit}</p></div>
                   <div className="p-3 bg-gray-50 rounded-xl"><p className="text-sm text-gray-500 mb-1">Vị trí</p><p className="font-medium">{selectedProduct.location}</p></div>
                   <div className="p-3 bg-gray-50 rounded-xl col-span-2"><p className="text-sm text-gray-500 mb-1">Ngày nhập liệu</p><p className="font-medium">{selectedProduct.importDate}</p></div>
                 </div>

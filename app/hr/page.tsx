@@ -5,7 +5,8 @@ import { Sidebar } from '@/components/sidebar'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Users, Plus, Edit2, Trash2, Search, X, Save, Eye, Bell, AlertTriangle } from 'lucide-react'
+import { Users, Plus, Edit2, Trash2, Search, X, Save, Eye, Bell, AlertTriangle, Download } from 'lucide-react'
+import jsPDF from 'jspdf'
 import { type Employee } from '@/lib/constants'
 import { getEmployeesFromDB, createEmployee, updateEmployee, deleteEmployeeFromDB } from '@/lib/db'
 
@@ -66,6 +67,238 @@ export default function HRPage() {
     if (!user) return false
     const perms = Array.isArray(user.chucNang) ? user.chucNang : [user.chucNang || '']
     return perms.includes('quan-ly-nhan-su') || perms.includes('them-tai-khoan') || user.isAdmin
+  }
+
+  const handleExportPDF = (emp: Employee) => {
+    const doc = new jsPDF('p', 'mm', 'a4')
+    const pageWidth = doc.internal.pageSize.getWidth()
+
+    const canvas = document.createElement('canvas')
+    const S = 2
+    const CW = 794
+    const CH = 1300
+    canvas.width = CW * S
+    canvas.height = CH * S
+    const ctx = canvas.getContext('2d')!
+    ctx.scale(S, S)
+
+    const M = 24
+    const innerW = CW - 2 * M
+    const colors = {
+      primary: '#0369a1',
+      primaryLight: '#e0f2fe',
+      primaryDark: '#075985',
+      accent: '#0284c7',
+      accentLight: '#f0f9ff',
+      gray50: '#f9fafb',
+      gray100: '#f3f4f6',
+      gray200: '#e5e7eb',
+      gray400: '#9ca3af',
+      gray500: '#6b7280',
+      gray700: '#374151',
+      gray900: '#111827',
+      white: '#ffffff',
+    }
+
+    const roundRect = (x: number, ry: number, w: number, h: number, r: number) => {
+      ctx.beginPath()
+      ctx.moveTo(x + r, ry)
+      ctx.lineTo(x + w - r, ry)
+      ctx.quadraticCurveTo(x + w, ry, x + w, ry + r)
+      ctx.lineTo(x + w, ry + h - r)
+      ctx.quadraticCurveTo(x + w, ry + h, x + w - r, ry + h)
+      ctx.lineTo(x + r, ry + h)
+      ctx.quadraticCurveTo(x, ry + h, x, ry + h - r)
+      ctx.lineTo(x, ry + r)
+      ctx.quadraticCurveTo(x, ry, x + r, ry)
+      ctx.closePath()
+    }
+
+    const drawCard = (startY: number, title: string, icon: string, items: { label: string; value: string }[]): number => {
+      let y = startY
+      const cardX = M
+      const cardW = innerW
+      const padding = 16
+      const rowH = 26
+      const headerH = 36
+      const totalH = headerH + items.length * rowH + padding * 2
+
+      roundRect(cardX, y, cardW, totalH, 6)
+      ctx.fillStyle = colors.white
+      ctx.fill()
+      ctx.strokeStyle = colors.gray200
+      ctx.lineWidth = 0.5
+      ctx.stroke()
+
+      ctx.save()
+      ctx.beginPath()
+      ctx.moveTo(cardX + 6, y)
+      ctx.lineTo(cardX + cardW - 6, y)
+      ctx.quadraticCurveTo(cardX + cardW, y, cardX + cardW, y + 6)
+      ctx.lineTo(cardX + cardW, y + headerH)
+      ctx.lineTo(cardX, y + headerH)
+      ctx.lineTo(cardX, y + 6)
+      ctx.quadraticCurveTo(cardX, y, cardX + 6, y)
+      ctx.closePath()
+      ctx.fillStyle = colors.primaryLight
+      ctx.fill()
+      ctx.restore()
+
+      ctx.font = 'bold 14px Arial, sans-serif'
+      ctx.fillStyle = colors.primary
+      ctx.textAlign = 'left'
+      ctx.fillText(icon + '  ' + title, cardX + padding, y + 24)
+
+      y += headerH + padding
+
+      items.forEach((item, i) => {
+        const rowY = y + i * rowH
+        if (i % 2 === 0) {
+          roundRect(cardX + 1, rowY - 12, cardW - 2, rowH, 3)
+          ctx.fillStyle = colors.gray50
+          ctx.fill()
+        }
+
+        ctx.font = 'bold 12px Arial, sans-serif'
+        ctx.fillStyle = colors.gray500
+        ctx.textAlign = 'left'
+        ctx.fillText(item.label, cardX + padding + 2, rowY)
+
+        ctx.font = '12px Arial, sans-serif'
+        ctx.fillStyle = colors.gray900
+        ctx.fillText(item.value || '---', cardX + padding + 130, rowY)
+      })
+
+      return y + items.length * rowH + padding
+    }
+
+    ctx.fillStyle = colors.white
+    ctx.fillRect(0, 0, CW, CH)
+
+    const headerH = 100
+    ctx.fillStyle = colors.primary
+    ctx.fillRect(0, 0, CW, headerH)
+
+    ctx.fillStyle = 'rgba(255,255,255,0.08)'
+    ctx.beginPath()
+    ctx.arc(CW - 60, -20, 140, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.beginPath()
+    ctx.arc(80, headerH + 30, 100, 0, Math.PI * 2)
+    ctx.fill()
+
+    ctx.textAlign = 'center'
+    ctx.font = 'bold 26px Arial, sans-serif'
+    ctx.fillStyle = colors.white
+    ctx.fillText('HỒ SƠ NHÂN VIÊN', CW / 2, 36)
+    ctx.font = '14px Arial, sans-serif'
+    ctx.fillStyle = 'rgba(255,255,255,0.8)'
+    ctx.fillText('CÔNG TY CP NƯỚC BIWASE - LONG AN', CW / 2, 56)
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)'
+    ctx.lineWidth = 0.5
+    ctx.beginPath()
+    ctx.moveTo(M + 40, 70)
+    ctx.lineTo(CW - M - 40, 70)
+    ctx.stroke()
+
+    ctx.font = 'bold 18px Arial, sans-serif'
+    ctx.fillStyle = colors.white
+    ctx.fillText(emp.hoTen, CW / 2, 92)
+
+    let y = headerH + 24
+
+    ctx.textAlign = 'left'
+    ctx.font = '13px Arial, sans-serif'
+    ctx.fillStyle = colors.gray500
+    ctx.fillText(`${emp.chuyenNganh || 'Chưa cập nhật'}  •  ${emp.loaiHD}  •  ${calcAge(emp.ngaySinh)} tuổi`, M, y)
+
+    y += 20
+
+    y = drawCard(y, 'THÔNG TIN CÁ NHÂN', '📋', [
+      { label: 'Họ và tên', value: emp.hoTen },
+      { label: 'Ngày sinh', value: emp.ngaySinh ? new Date(emp.ngaySinh).toLocaleDateString('vi-VN') : '' },
+      { label: 'Tuổi', value: `${calcAge(emp.ngaySinh)} tuổi` },
+      { label: 'Giới tính', value: emp.gioiTinh },
+      { label: 'Số điện thoại', value: emp.soDienThoai || '' },
+      { label: 'CCCD / CMND', value: emp.cccd },
+      { label: 'Ngày cấp', value: emp.ngayCapCCCD ? new Date(emp.ngayCapCCCD).toLocaleDateString('vi-VN') : '' },
+      { label: 'Nơi cấp', value: emp.noiCapCCCD || '' },
+    ])
+
+    y += 10
+
+    y = drawCard(y, 'THÔNG TIN CÔNG VIỆC', '💼', [
+      { label: 'Ngày thử việc', value: emp.ngayThuViec ? new Date(emp.ngayThuViec).toLocaleDateString('vi-VN') : '' },
+      { label: 'Ngày chính thức', value: emp.ngayChinhThuc ? new Date(emp.ngayChinhThuc).toLocaleDateString('vi-VN') : '' },
+      { label: 'Ngày hết hạn HĐ', value: emp.ngayHetHD ? new Date(emp.ngayHetHD).toLocaleDateString('vi-VN') : '' },
+      { label: 'Loại hợp đồng', value: emp.loaiHD },
+      { label: 'Thâm niên', value: calcSeniority(emp.ngayChinhThuc || emp.ngayThuViec) },
+    ])
+
+    y += 10
+
+    y = drawCard(y, 'HỌC VẤN & ĐÀO TẠO', '🎓', [
+      { label: 'Trình độ', value: emp.trinhDo },
+      { label: 'Chuyên ngành', value: emp.chuyenNganh || '' },
+      { label: 'Trường đào tạo', value: emp.truongDaoTao || '' },
+      { label: 'Năm tốt nghiệp', value: emp.namTotNghiep || '' },
+    ])
+
+    y += 10
+
+    y = drawCard(y, 'ĐỊA CHỈ LIÊN HỆ', '📍', [
+      { label: 'Địa chỉ', value: emp.diaChi || '' },
+    ])
+
+    if (emp.ghiChu) {
+      y += 10
+      const noteX = M
+      const noteW = innerW
+      const noteLines = emp.ghiChu.split('\n')
+      const noteH = 28 + noteLines.length * 14
+
+      roundRect(noteX, y, noteW, noteH, 6)
+      ctx.fillStyle = '#fffbeb'
+      ctx.fill()
+      ctx.strokeStyle = '#fbbf24'
+      ctx.lineWidth = 0.5
+      ctx.stroke()
+
+      ctx.font = 'bold 13px Arial, sans-serif'
+      ctx.fillStyle = '#92400e'
+      ctx.textAlign = 'left'
+      ctx.fillText('📝  GHI CHÚ', noteX + 14, y + 20)
+
+      ctx.font = '12px Arial, sans-serif'
+      ctx.fillStyle = colors.gray700
+      noteLines.forEach((line, i) => {
+        ctx.fillText(line, noteX + 14, y + 38 + i * 16)
+      })
+
+      y += noteH
+    }
+
+    const footerY = CH - 36
+    ctx.strokeStyle = colors.gray200
+    ctx.lineWidth = 0.5
+    ctx.beginPath()
+    ctx.moveTo(M, footerY)
+    ctx.lineTo(CW - M, footerY)
+    ctx.stroke()
+
+    ctx.font = '10px Arial, sans-serif'
+    ctx.fillStyle = colors.gray400
+    ctx.textAlign = 'left'
+    ctx.fillText(`Ngày xuất: ${new Date().toLocaleDateString('vi-VN')} ${new Date().toLocaleTimeString('vi-VN')}`, M, footerY + 14)
+    ctx.textAlign = 'right'
+    ctx.fillText('Hệ thống Quản lý Nhân sự BIWASE', CW - M, footerY + 14)
+
+    const imgData = canvas.toDataURL('image/png')
+    const imgWidth = pageWidth
+    const imgHeight = (canvas.height * imgWidth) / canvas.width
+    doc.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight)
+    doc.save(`HoSo_${emp.hoTen.replace(/\s+/g, '_')}.pdf`)
   }
 
   const filteredEmployees = employees.filter(e => e.hoTen.toLowerCase().includes(searchTerm.toLowerCase()))
@@ -199,7 +432,10 @@ export default function HRPage() {
               <div className="bg-white rounded-2xl p-6 w-full max-w-3xl shadow-2xl max-h-[90vh] overflow-y-auto border-2 border-indigo-100">
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-xl font-bold text-gray-800">Hồ Sơ Nhân Viên</h2>
-                  <button onClick={() => setIsDetailOpen(false)} className="p-1 hover:bg-gray-100 rounded"><X className="w-5 h-5 text-gray-500" /></button>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => handleExportPDF(selectedEmployee)} className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium cursor-pointer"><Download className="w-4 h-4" /> Xuất PDF</button>
+                    <button onClick={() => setIsDetailOpen(false)} className="p-1 hover:bg-gray-100 rounded"><X className="w-5 h-5 text-gray-500" /></button>
+                  </div>
                 </div>
                 <div className="mb-4 p-4 bg-indigo-50 rounded-xl border border-indigo-200">
                   <p className="text-lg font-bold text-gray-800">{selectedEmployee.hoTen}</p>
