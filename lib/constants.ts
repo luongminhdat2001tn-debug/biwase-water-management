@@ -99,7 +99,7 @@ export interface Employee {
   ngayHetHD: string
   loaiHD: string
   trinhDo: string
-  chuyenNganh: string
+  chucVu: string
   truongDaoTao: string
   namTotNghiep: string
   diaChi: string

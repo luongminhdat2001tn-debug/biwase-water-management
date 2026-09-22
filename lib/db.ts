@@ -263,7 +263,7 @@ export async function updateEmployee(id: number, emp: Partial<Employee>): Promis
   if (emp.ngayHetHD !== undefined) dbUpdates.ngay_het_hd = emp.ngayHetHD || null
   if (emp.loaiHD !== undefined) dbUpdates.loai_hd = emp.loaiHD || null
   if (emp.trinhDo !== undefined) dbUpdates.trinh_do = emp.trinhDo
-  if (emp.chuyenNganh !== undefined) dbUpdates.chuyen_nganh = emp.chuyenNganh
+  if (emp.chucVu !== undefined) dbUpdates.chuc_vu = emp.chucVu
   if (emp.truongDaoTao !== undefined) dbUpdates.truong_dao_tao = emp.truongDaoTao
   if (emp.namTotNghiep !== undefined) dbUpdates.nam_tot_nghiep = emp.namTotNghiep
   if (emp.diaChi !== undefined) dbUpdates.dia_chi = emp.diaChi
@@ -398,7 +398,7 @@ function mapEmployeeFromDB(row: any): Employee {
     ngayHetHD: row.ngay_het_hd || '',
     loaiHD: row.loai_hd || '',
     trinhDo: row.trinh_do || '',
-    chuyenNganh: row.chuyen_nganh || '',
+    chucVu: row.chuc_vu || '',
     truongDaoTao: row.truong_dao_tao || '',
     namTotNghiep: row.nam_tot_nghiep || '',
     diaChi: row.dia_chi || '',
@@ -421,7 +421,7 @@ function mapEmployeeToDB(emp: any): any {
     ngay_het_hd: emp.ngayHetHD || null,
     loai_hd: emp.loaiHD || null,
     trinh_do: emp.trinhDo || null,
-    chuyen_nganh: emp.chuyenNganh || null,
+    chuc_vu: emp.chucVu || null,
     truong_dao_tao: emp.truongDaoTao || null,
     nam_tot_nghiep: emp.namTotNghiep || null,
     dia_chi: emp.diaChi || null,

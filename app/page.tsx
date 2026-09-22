@@ -204,7 +204,7 @@ export default function LoginPage() {
           <div className="mb-6 md:mb-12">
             <Image
               src="/logo.png"
-              alt="Công ty cổ phần nước BIWASE - Long An"
+              alt="Công Ty Cổ Phần Nước BIWASE Long An"
               width={220}
               height={220}
               className="object-contain drop-shadow-lg w-[160px] h-[160px] md:w-[280px] md:h-[280px] lg:w-[340px] lg:h-[340px]"
@@ -216,7 +216,7 @@ export default function LoginPage() {
           </h1>
           {/* Tên công ty - cập nhật theo yêu cầu */}
           <p className="text-xl md:text-3xl lg:text-4xl leading-relaxed tracking-wide mb-2 md:mb-4 font-bold text-gray-800">
-            Công ty cổ phần nước BIWASE - Long An
+            Công Ty Cổ Phần Nước BIWASE Long An
           </p>
           {/* Slogan */}
           <p className="text-base md:text-xl lg:text-2xl leading-8 tracking-wide opacity-70 font-light italic text-gray-600">

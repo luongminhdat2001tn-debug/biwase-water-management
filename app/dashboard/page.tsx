@@ -54,7 +54,7 @@ export default function DashboardPage() {
             </div>
             <CardContent className="pt-16 pb-6 px-8">
               <h2 className="text-2xl font-bold text-gray-800">{displayName}</h2>
-              <p className="text-sky-600 font-medium">{employee?.chuyenNganh || user.chucVu || 'Nhân viên'}</p>
+              <p className="text-sky-600 font-medium">{employee?.chucVu || user.chucVu || 'Nhân viên'}</p>
               {employee && <p className="text-sm text-gray-500 mt-1">{employee.loaiHD} • {employee.trinhDo}</p>}
             </CardContent>
           </Card>
@@ -104,7 +104,7 @@ export default function DashboardPage() {
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     {[
                       ['Trình độ', employee.trinhDo],
-                      ['Chuyên ngành', employee.chuyenNganh],
+                      ['Chức vụ', employee.chucVu],
                       ['Trường đào tạo', employee.truongDaoTao],
                       ['Năm tốt nghiệp', employee.namTotNghiep],
                     ].map(([l, v]) => (

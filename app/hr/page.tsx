@@ -48,7 +48,7 @@ export default function HRPage() {
   const [formData, setFormData] = useState<Employee>({
     id: 0, hoTen: '', ngaySinh: '', gioiTinh: 'Nam', cccd: '', ngayCapCCCD: '', noiCapCCCD: '', soDienThoai: '',
     ngayThuViec: '', ngayChinhThuc: '', ngayHetHD: '', loaiHD: 'Chính thức', trinhDo: 'Đại học',
-    chuyenNganh: '', truongDaoTao: '', namTotNghiep: '', diaChi: '', username: '', ghiChu: '',
+    chucVu: '', truongDaoTao: '', namTotNghiep: '', diaChi: '', username: '', ghiChu: '',
   })
 
   const loadEmployees = async () => {
@@ -211,7 +211,7 @@ export default function HRPage() {
     ctx.textAlign = 'left'
     ctx.font = '13px Arial, sans-serif'
     ctx.fillStyle = colors.gray500
-    ctx.fillText(`${emp.chuyenNganh || 'Chưa cập nhật'}  •  ${emp.loaiHD}  •  ${calcAge(emp.ngaySinh)} tuổi`, M, y)
+    ctx.fillText(`${emp.chucVu || 'Chưa cập nhật'}  •  ${emp.loaiHD}  •  ${calcAge(emp.ngaySinh)} tuổi`, M, y)
 
     y += 20
 
@@ -240,7 +240,7 @@ export default function HRPage() {
 
     y = drawCard(y, 'HỌC VẤN & ĐÀO TẠO', '🎓', [
       { label: 'Trình độ', value: emp.trinhDo },
-      { label: 'Chuyên ngành', value: emp.chuyenNganh || '' },
+      { label: 'Chức vụ', value: emp.chucVu || '' },
       { label: 'Trường đào tạo', value: emp.truongDaoTao || '' },
       { label: 'Năm tốt nghiệp', value: emp.namTotNghiep || '' },
     ])
@@ -308,7 +308,7 @@ export default function HRPage() {
 
   const handleAdd = () => {
     setEditingEmployee(null)
-    setFormData({ id: 0, hoTen: '', ngaySinh: '', gioiTinh: 'Nam', cccd: '', ngayCapCCCD: '', noiCapCCCD: '', soDienThoai: '', ngayThuViec: '', ngayChinhThuc: '', ngayHetHD: '', loaiHD: 'Chính thức', trinhDo: 'Đại học', chuyenNganh: '', truongDaoTao: '', namTotNghiep: '', diaChi: '', username: '', ghiChu: '' })
+    setFormData({ id: 0, hoTen: '', ngaySinh: '', gioiTinh: 'Nam', cccd: '', ngayCapCCCD: '', noiCapCCCD: '', soDienThoai: '', ngayThuViec: '', ngayChinhThuc: '', ngayHetHD: '', loaiHD: 'Chính thức', trinhDo: 'Đại học', chucVu: '', truongDaoTao: '', namTotNghiep: '', diaChi: '', username: '', ghiChu: '' })
     setIsModalOpen(true)
   }
 
@@ -323,7 +323,7 @@ export default function HRPage() {
   }
 
   const handleSave = async () => {
-    if (!formData.hoTen || !formData.ngaySinh || !formData.cccd) { alert('Vui lòng điền đầy đủ thông tin bắt buộc! (Họ tên, Ngày sinh, CCCD)'); return }
+    if (!formData.hoTen || !formData.chucVu) { alert('Vui lòng điền đầy đủ thông tin bắt buộc! (Họ tên, Chức vụ)'); return }
     if (editingEmployee) {
       await updateEmployee(editingEmployee.id, formData)
     } else {
@@ -397,7 +397,7 @@ export default function HRPage() {
                       <tr key={emp.id} className={`border-b hover:bg-gray-50 ${isExpired(emp.ngayHetHD) ? 'bg-red-50' : isExpiringSoon(emp.ngayHetHD) ? 'bg-amber-50' : ''}`}>
                         <td className="py-3 px-3 text-center text-gray-600">{index + 1}</td>
                         <td className="py-3 px-3 font-medium text-gray-800">{emp.hoTen}</td>
-                        <td className="py-3 px-3 text-gray-600">{emp.chuyenNganh}</td>
+                        <td className="py-3 px-3 text-gray-600">{emp.chucVu}</td>
                         <td className="py-3 px-3">
                           <span className={`px-2 py-1 rounded text-xs font-medium ${emp.loaiHD === 'Chính thức' ? 'bg-green-100 text-green-700' : emp.loaiHD === 'Thử việc' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-700'}`}>{emp.loaiHD}</span>
                         </td>
@@ -439,7 +439,7 @@ export default function HRPage() {
                 </div>
                 <div className="mb-4 p-4 bg-indigo-50 rounded-xl border border-indigo-200">
                   <p className="text-lg font-bold text-gray-800">{selectedEmployee.hoTen}</p>
-                  <p className="text-sm text-indigo-600">{selectedEmployee.chuyenNganh} • {selectedEmployee.loaiHD}</p>
+                  <p className="text-sm text-indigo-600">{selectedEmployee.chucVu} • {selectedEmployee.loaiHD}</p>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {[
@@ -456,7 +456,7 @@ export default function HRPage() {
                     ['Loại HĐ', selectedEmployee.loaiHD],
                     ['Thâm niên', calcSeniority(selectedEmployee.ngayChinhThuc || selectedEmployee.ngayThuViec)],
                     ['Trình độ', selectedEmployee.trinhDo],
-                    ['Chuyên ngành', selectedEmployee.chuyenNganh],
+                    ['Chức vụ', selectedEmployee.chucVu],
                     ['Trường đào tạo', selectedEmployee.truongDaoTao],
                     ['Năm tốt nghiệp', selectedEmployee.namTotNghiep],
                     ['Địa chỉ', selectedEmployee.diaChi],
@@ -485,9 +485,9 @@ export default function HRPage() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   <div><label className="block text-sm font-medium text-gray-700 mb-1">Họ và tên *</label><Input value={formData.hoTen} onChange={e => setFormData({...formData, hoTen: e.target.value})} className="border-2" /></div>
-                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Ngày sinh *</label><Input type="date" value={formData.ngaySinh} onChange={e => setFormData({...formData, ngaySinh: e.target.value})} className="border-2" /></div>
+                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Ngày sinh</label><Input type="date" value={formData.ngaySinh} onChange={e => setFormData({...formData, ngaySinh: e.target.value})} className="border-2" /></div>
                   <div><label className="block text-sm font-medium text-gray-700 mb-1">Giới tính</label><select value={formData.gioiTinh} onChange={e => setFormData({...formData, gioiTinh: e.target.value})} className="w-full p-2 border-2 rounded-lg">{GIOI_TINH_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}</select></div>
-                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Số CCCD *</label><Input value={formData.cccd} onChange={e => setFormData({...formData, cccd: e.target.value})} className="border-2" /></div>
+                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Số CCCD</label><Input value={formData.cccd} onChange={e => setFormData({...formData, cccd: e.target.value})} className="border-2" /></div>
                   <div><label className="block text-sm font-medium text-gray-700 mb-1">Ngày cấp CCCD</label><Input type="date" value={formData.ngayCapCCCD} onChange={e => setFormData({...formData, ngayCapCCCD: e.target.value})} className="border-2" /></div>
                   <div><label className="block text-sm font-medium text-gray-700 mb-1">Nơi cấp CCCD</label><Input value={formData.noiCapCCCD} onChange={e => setFormData({...formData, noiCapCCCD: e.target.value})} className="border-2" /></div>
                   <div><label className="block text-sm font-medium text-gray-700 mb-1">Số điện thoại</label><Input type="tel" value={formData.soDienThoai || ''} onChange={e => setFormData({...formData, soDienThoai: e.target.value})} className="border-2" /></div>
@@ -496,7 +496,7 @@ export default function HRPage() {
                   <div><label className="block text-sm font-medium text-gray-700 mb-1">Ngày hết hạn HĐ</label><Input type="date" value={formData.ngayHetHD} onChange={e => setFormData({...formData, ngayHetHD: e.target.value})} className="border-2" /></div>
                   <div><label className="block text-sm font-medium text-gray-700 mb-1">Loại HĐ</label><select value={formData.loaiHD} onChange={e => setFormData({...formData, loaiHD: e.target.value})} className="w-full p-2 border-2 rounded-lg">{LOAI_HD_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}</select></div>
                   <div><label className="block text-sm font-medium text-gray-700 mb-1">Trình độ</label><select value={formData.trinhDo} onChange={e => setFormData({...formData, trinhDo: e.target.value})} className="w-full p-2 border-2 rounded-lg">{TRINH_DO_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}</select></div>
-                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Chuyên ngành</label><Input value={formData.chuyenNganh} onChange={e => setFormData({...formData, chuyenNganh: e.target.value})} className="border-2" /></div>
+                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Chức vụ *</label><Input value={formData.chucVu} onChange={e => setFormData({...formData, chucVu: e.target.value})} className="border-2" /></div>
                   <div><label className="block text-sm font-medium text-gray-700 mb-1">Trường đào tạo</label><Input value={formData.truongDaoTao} onChange={e => setFormData({...formData, truongDaoTao: e.target.value})} className="border-2" /></div>
                   <div><label className="block text-sm font-medium text-gray-700 mb-1">Năm tốt nghiệp</label><Input value={formData.namTotNghiep} onChange={e => setFormData({...formData, namTotNghiep: e.target.value})} className="border-2" /></div>
                   <div><label className="block text-sm font-medium text-gray-700 mb-1">Liên kết TK</label><Input value={formData.username || ''} onChange={e => setFormData({...formData, username: e.target.value})} placeholder="username tài khoản..." className="border-2" /></div>
