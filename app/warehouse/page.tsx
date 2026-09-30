@@ -5,6 +5,7 @@ import { Sidebar } from '@/components/sidebar'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Package, Plus, Edit2, Trash2, Search, X, Save, Warehouse, Factory, ShoppingBag, Building, Upload, LogIn, LogOut, FlaskConical, RefreshCw } from 'lucide-react'
 import { type Product } from '@/lib/constants'
 import { getProductsByWarehouse, createProduct, updateProduct, deleteProduct, addHistoryEntry, uploadImage, findProductByCode, normalizeProductCode, findProductByNameInWarehouse } from '@/lib/db'
@@ -29,7 +30,10 @@ export default function WarehousePage() {
   const [exportCodeInput, setExportCodeInput] = useState('')
   const [foundProduct, setFoundProduct] = useState<Product | null>(null)
   const [exportQuantity, setExportQuantity] = useState(0)
-  const [exportPrice, setExportPrice] = useState(0)
+  // Lý do xuất kho (bắt buộc) + lỗi đỏ inline cho số lượng / lý do
+  const [exportReason, setExportReason] = useState('')
+  const [exportQuantityError, setExportQuantityError] = useState('')
+  const [exportReasonError, setExportReasonError] = useState('')
   // isSaving: chặn bấm nút nhiều lần
   const [isSaving, setIsSaving] = useState(false)
 
@@ -215,7 +219,9 @@ export default function WarehousePage() {
     setExportCodeInput('')
     setFoundProduct(null)
     setExportQuantity(0)
-    setExportPrice(0)
+    setExportReason('')
+    setExportQuantityError('')
+    setExportReasonError('')
     setIsModalOpen(true)
   }
 
@@ -242,6 +248,10 @@ export default function WarehousePage() {
       setFoundProduct(null)
       setExportQuantity(0)
     }
+    // Đổi mã hàng = reset lý do + lỗi đỏ (tránh giữ lỗi của SP cũ)
+    setExportReason('')
+    setExportQuantityError('')
+    setExportReasonError('')
   }
 
   // Tìm sản phẩm khi nhập mã để nhập kho
@@ -261,11 +271,14 @@ export default function WarehousePage() {
   // Xác nhận xuất kho
   const handleConfirmExport = async () => {
     if (!foundProduct) { alert('Không tìm thấy sản phẩm!'); return }
-    if (exportQuantity <= 0) { alert('Số lượng xuất phải lớn hơn 0!'); return }
+    // Số lượng xuất: bắt buộc, > 0, không vượt tồn (lỗi đỏ inline, không alert)
+    if (!exportQuantity || exportQuantity <= 0) { setExportQuantityError('Vui lòng nhập số lượng xuất lớn hơn 0!'); return }
     if (exportQuantity > foundProduct.quantity) {
-      alert(`Số lượng tồn kho không đủ! Hiện có: ${foundProduct.quantity} ${foundProduct.unit}`)
+      setExportQuantityError(`Số lượng tồn kho không đủ! Hiện có: ${foundProduct.quantity} ${foundProduct.unit}`)
       return
     }
+    // Lý do xuất kho: bắt buộc (trống hoặc chỉ trắng = lỗi đỏ inline)
+    if (!exportReason.trim()) { setExportReasonError('Vui lòng nhập lý do xuất kho!'); return }
     setIsSaving(true)
     await updateProduct(foundProduct.id, { quantity: foundProduct.quantity - exportQuantity })
     await addHistoryEntry({
@@ -277,7 +290,7 @@ export default function WarehousePage() {
       userName: user?.name || user?.username || '',
       action: 'Xuất kho',
       quantity: exportQuantity,
-      details: `Xuất ${exportQuantity} ${foundProduct.unit}, giá ${exportPrice.toLocaleString('vi-VN')}đ`,
+      details: `Xuất ${exportQuantity} ${foundProduct.unit} — Lý do: ${exportReason.trim()}`,
     })
     alert(`Đã xuất ${exportQuantity} ${foundProduct.unit} ${foundProduct.name}`)
     setIsModalOpen(false)
@@ -794,7 +807,7 @@ export default function WarehousePage() {
               <div className="bg-white rounded-2xl p-6 w-full max-w-5xl shadow-2xl max-h-[90vh] overflow-y-auto">
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-xl font-bold text-gray-800">Xuất Kho</h2>
-                  <button onClick={() => setIsModalOpen(false)} className="p-1 hover:bg-gray-100 rounded">
+                  <button onClick={() => { setIsModalOpen(false); setExportQuantityError(''); setExportReasonError('') }} className="p-1 hover:bg-gray-100 rounded">
                     <X className="w-5 h-5 text-gray-500" />
                   </button>
                 </div>
@@ -857,34 +870,33 @@ export default function WarehousePage() {
                                 type="text"
                                 inputMode="numeric"
                                 value={exportQuantity || ''}
-                                onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ''); setExportQuantity(v ? parseInt(v) : 0) }}
-                                className="border-2 text-lg"
+                                onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ''); setExportQuantity(v ? parseInt(v) : 0); if (exportQuantityError) setExportQuantityError('') }}
+                                className={`border-2 text-lg ${exportQuantityError ? 'border-red-500 bg-red-50 focus:ring-red-400' : ''}`}
                               />
+                              {exportQuantityError && (
+                                <p className="text-red-600 text-xs mt-1 font-medium">⚠️ {exportQuantityError}</p>
+                              )}
                             </div>
                             <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">Giá xuất (VNĐ)</label>
-                              <Input
-                                type="text"
-                                inputMode="numeric"
-                                value={exportPrice ? exportPrice.toLocaleString('vi-VN') : ''}
-                                onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ''); setExportPrice(v ? parseInt(v) : 0) }}
-                                className="border-2 text-lg"
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Lý do *
+                              </label>
+                              <Textarea
+                                value={exportReason}
+                                onChange={(e) => { setExportReason(e.target.value); if (exportReasonError) setExportReasonError('') }}
+                                placeholder="Nhập lý do xuất kho..."
+                                className={`border-2 ${exportReasonError ? 'border-red-500 bg-red-50 focus:ring-red-400' : ''}`}
                               />
-                            </div>
-                            <div className="p-3 bg-orange-50 rounded-lg border border-orange-200">
-                              <div className="flex justify-between items-center">
-                                <span className="font-medium text-gray-700">Tổng giá trị:</span>
-                                <span className="text-xl font-bold text-orange-600">
-                                  {(exportQuantity * exportPrice).toLocaleString('vi-VN')} đ
-                                </span>
-                              </div>
+                              {exportReasonError && (
+                                <p className="text-red-600 text-xs mt-1 font-medium">⚠️ {exportReasonError}</p>
+                              )}
                             </div>
                           </div>
                         </div>
                       </div>
 
                       <div className="mt-4 flex gap-3">
-                        <Button variant="outline" onClick={() => setIsModalOpen(false)} className="flex-1">Hủy</Button>
+                        <Button variant="outline" onClick={() => { setIsModalOpen(false); setExportQuantityError(''); setExportReasonError('') }} className="flex-1">Hủy</Button>
                         <Button onClick={handleConfirmExport} className="flex-1 bg-orange-500 hover:bg-orange-600 text-white" disabled={isSaving}>
                           <LogOut className="w-4 h-4 mr-2" />
                           {isSaving ? 'Đang xử lý...' : 'Xác Nhận Xuất Kho'}
