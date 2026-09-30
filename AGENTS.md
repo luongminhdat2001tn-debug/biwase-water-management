@@ -30,4 +30,4 @@ Next.js 16 + React 19 + Tailwind v4 + shadcn (`new-york`) + Supabase. Vietnamese
 - Always check docs folder first:
     + If the feature existed, update the md file in plans/specs folder
     + If the feature doesn't exist, create a new file in plans/specs folder with page_name.md and use english. Like example: warehouse.md
-- Before implementing a task, make sure it follow by these steps: create/update spec file in specs folder => reviewed => create/update plan file in plans folder => reviewed => implementation
+- Before implementing a task, make sure it follow by these steps: create/update spec file in specs folder => user reviewed and approved => create/update plan file in plans folder => user reviewed and approved => implementation
