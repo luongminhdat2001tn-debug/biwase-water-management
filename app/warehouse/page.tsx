@@ -1,13 +1,13 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Sidebar } from '@/components/sidebar'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Package, Plus, Edit2, Trash2, Search, X, Save, Warehouse, Factory, ShoppingBag, Building, Upload, LogIn, LogOut, FlaskConical, RefreshCw } from 'lucide-react'
 import { type Product } from '@/lib/constants'
-import { getProductsByWarehouse, createProduct, updateProduct, deleteProduct, addHistoryEntry, uploadImage } from '@/lib/db'
+import { getProductsByWarehouse, createProduct, updateProduct, deleteProduct, addHistoryEntry, uploadImage, findProductByCode, normalizeProductCode, findProductByNameInWarehouse } from '@/lib/db'
 
 const WAREHOUSES = [
   { id: 'kho-vat-tu', name: 'Kho Vật Tư Nhà Máy', icon: Factory, color: 'blue' },
@@ -59,12 +59,82 @@ export default function WarehousePage() {
   const [locationImageFile, setLocationImageFile] = useState<File | null>(null)
 
   // ------------------------------------------
-  // Kiểm tra trùng mã hàng trong kho hiện tại
-  // Chỉ kiểm tra khi THÊM MỚI, không kiểm tra khi sửa
+  // Trạng thái trùng mã toàn hệ thống (check qua DB cả 4 kho,
+  // không chỉ kho đang chọn). Chỉ dùng khi THÊM MỚI, không khi sửa.
   // ------------------------------------------
-  const isDuplicateCode = !editingProduct && !!formData.code && products.some(
-    (p) => p.code.toLowerCase() === formData.code.toLowerCase()
-  )
+  const [duplicateInfo, setDuplicateInfo] = useState<{ warehouseId: string; warehouseName: string } | null>(null)
+  const [checkingCode, setCheckingCode] = useState(false)
+  // Giữ mã mới nhất để bỏ kết quả cũ khi user gõ nhanh (tránh race)
+  const latestCodeRef = useRef('')
+
+  // Map warehouseId -> tên kho hiển thị (dùng bảng WAREHOUSES của trang này)
+  const warehouseNameById = (id: string) => WAREHOUSES.find(w => w.id === id)?.name || id
+
+  // Query DB kiểm tra mã đã tồn tại ở kho nào chưa
+  const checkDuplicateGlobally = async (code: string) => {
+    const normalized = normalizeProductCode(code)
+    if (!normalized) { setDuplicateInfo(null); return null }
+    latestCodeRef.current = normalized
+    setCheckingCode(true)
+    try {
+      const found = await findProductByCode(normalized)
+      // Chỉ nhận kết quả nếu user chưa gõ mã khác trong lúc chờ
+      if (latestCodeRef.current !== normalized) return duplicateInfo
+      const info = found ? { warehouseId: found.warehouseId, warehouseName: warehouseNameById(found.warehouseId) } : null
+      setDuplicateInfo(info)
+      return info
+    } finally {
+      setCheckingCode(false)
+    }
+  }
+
+  // Live-check khi user gõ mã hàng (debounce 400ms để đỡ spam DB)
+  useEffect(() => {
+    if (!isModalOpen || modalType !== 'import' || editingProduct) return
+    const code = formData.code
+    if (!normalizeProductCode(code)) { setDuplicateInfo(null); return }
+    const t = setTimeout(() => { checkDuplicateGlobally(code) }, 400)
+    return () => clearTimeout(t)
+  }, [formData.code, isModalOpen, modalType, editingProduct])
+
+  // ------------------------------------------
+  // Trạng thái trùng tên trong kho HIỆN TẠI
+  // (Tên hàng chỉ cần duy nhất trong cùng kho,
+  // khác kho được phép trùng tên)
+  // ------------------------------------------
+  const [duplicateName, setDuplicateName] = useState(false)
+  const [checkingName, setCheckingName] = useState(false)
+  // Giữ tên mới nhất để bỏ kết quả cũ khi user gõ nhanh (tránh race)
+  const latestNameRef = useRef('')
+
+  // Query DB kiểm tra tên đã tồn tại trong kho hiện tại chưa
+  // Khi sửa: bỏ qua chính sản phẩm đang sửa (giữ nguyên tên vẫn OK)
+  const checkDuplicateName = async (name: string) => {
+    const normalized = (name || '').trim()
+    if (!normalized) { setDuplicateName(false); return false }
+    const requestKey = `${selectedWarehouse}||${normalized.toLowerCase()}`
+    latestNameRef.current = requestKey
+    setCheckingName(true)
+    try {
+      const found = await findProductByNameInWarehouse(normalized, selectedWarehouse)
+      // Chỉ nhận kết quả nếu user chưa gõ tên/kho khác trong lúc chờ
+      if (latestNameRef.current !== requestKey) return duplicateName
+      const isDup = !!found && (!editingProduct || found.id !== editingProduct.id)
+      setDuplicateName(isDup)
+      return isDup
+    } finally {
+      setCheckingName(false)
+    }
+  }
+
+  // Live-check khi user gõ tên hàng (debounce 400ms để đỡ spam DB)
+  useEffect(() => {
+    if (!isModalOpen || modalType !== 'import') return
+    const name = formData.name
+    if (!(name || '').trim()) { setDuplicateName(false); return }
+    const t = setTimeout(() => { checkDuplicateName(name) }, 400)
+    return () => clearTimeout(t)
+  }, [formData.name, selectedWarehouse, isModalOpen, modalType, editingProduct])
 
   // Load products từ Supabase khi chọn kho
   const loadProducts = async (warehouseId: string) => {
@@ -100,6 +170,8 @@ export default function WarehousePage() {
   const handleImport = () => {
     setEditingProduct(null)
     setModalType('import')
+    setDuplicateInfo(null)
+    setDuplicateName(false)
     setFormData({ code: '', name: '', unit: '', quantity: '', priceIn: '', priceOut: '', weight: '', weightUnit: 'kg', location: '', locationImage: '', productImage: '', importDate: new Date().toISOString().split('T')[0] })
     setProductImageFile(null)
     setLocationImageFile(null)
@@ -214,6 +286,7 @@ export default function WarehousePage() {
   const handleEdit = (product: Product) => {
     setEditingProduct(product)
     setModalType('import')
+    setDuplicateName(false)
     setFormData({
       code: product.code,
       name: product.name,
@@ -247,8 +320,19 @@ export default function WarehousePage() {
       alert('Vui lòng điền đầy đủ thông tin bắt buộc!')
       return
     }
-    if (isDuplicateCode) {
-      alert('Mã hàng đã tồn tại trong kho này! Vui lòng dùng mã khác.')
+    // Chặn trùng mã trên TOÀN hệ thống (chỉ khi thêm mới;
+    // khi sửa thì ô mã bị khóa nên bỏ qua, tránh tự chặn chính mình)
+    if (!editingProduct) {
+      const dup = await checkDuplicateGlobally(formData.code)
+      if (dup) {
+        alert('Mã hàng này đã tồn tại. Vui lòng kiểm tra lại')
+        return
+      }
+    }
+    // Chặn trùng tên trong cùng kho (thêm mới, hoặc sửa đổi sang tên SP khác)
+    const nameDup = await checkDuplicateName(formData.name)
+    if (nameDup) {
+      alert('Tên hàng này đã tồn tại. Vui lòng kiểm tra lại!')
       return
     }
 
@@ -504,11 +588,14 @@ export default function WarehousePage() {
                     <Input
                       value={formData.code}
                       onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
-                      className={`border-2 ${isDuplicateCode ? 'border-red-500 bg-red-50 focus:ring-red-400' : ''}`}
+                      className={`border-2 ${duplicateInfo ? 'border-red-500 bg-red-50 focus:ring-red-400' : ''}`}
                       disabled={!!editingProduct}
                     />
-                    {isDuplicateCode && (
-                      <p className="text-red-600 text-xs mt-1 font-medium">⚠️ Mã hàng đã tồn tại trong kho này! Vui lòng sử dụng mã khác.</p>
+                    {checkingCode && !duplicateInfo && (
+                      <p className="text-gray-500 text-xs mt-1">Đang kiểm tra mã hàng...</p>
+                    )}
+                    {duplicateInfo && (
+                      <p className="text-red-600 text-xs mt-1 font-medium">⚠️ Mã hàng này đã tồn tại (tại {duplicateInfo.warehouseName}). Vui lòng kiểm tra lại</p>
                     )}
                   </div>
 
@@ -517,8 +604,14 @@ export default function WarehousePage() {
                     <Input
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      className="border-2"
+                      className={`border-2 ${duplicateName ? 'border-red-500 bg-red-50 focus:ring-red-400' : ''}`}
                     />
+                    {checkingName && !duplicateName && (
+                      <p className="text-gray-500 text-xs mt-1">Đang kiểm tra tên hàng...</p>
+                    )}
+                    {duplicateName && (
+                      <p className="text-red-600 text-xs mt-1 font-medium">⚠️ Tên hàng này đã tồn tại. Vui lòng kiểm tra lại!</p>
+                    )}
                   </div>
 
                   <div>
@@ -662,7 +755,7 @@ export default function WarehousePage() {
                     <Button
                       onClick={handleSave}
                       className="flex-1 bg-green-600 hover:bg-green-700"
-                      disabled={isSaving || isDuplicateCode}
+                      disabled={isSaving || checkingCode || !!duplicateInfo || checkingName || duplicateName}
                     >
                       <Save className="w-4 h-4 mr-2" />
                       {isSaving ? 'Đang lưu...' : (editingProduct ? 'Cập Nhật' : 'Nhập Liệu')}

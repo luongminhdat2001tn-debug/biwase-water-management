@@ -120,6 +120,44 @@ export async function getAllProducts(): Promise<Record<string, Product[]>> {
   return grouped
 }
 
+/** Chuẩn hóa mã hàng để so sánh trùng (bỏ trắng thừa, đưa về chữ hoa) */
+export function normalizeProductCode(code: string): string {
+  return (code || '').trim().toUpperCase()
+}
+
+/** Tìm sản phẩm theo mã trên TOÀN hệ thống (bỏ qua bản ghi đã xóa mềm) */
+export async function findProductByCode(code: string): Promise<{ warehouseId: string } | null> {
+  const normalized = normalizeProductCode(code)
+  if (!normalized) return null
+  // ilike (không wildcard) = so sánh chính xác, không phân biệt hoa/thường
+  const { data, error } = await supabase
+    .from('products')
+    .select('warehouse_id')
+    .ilike('code', normalized)
+    .eq('is_deleted', false)
+    .limit(1)
+    .maybeSingle()
+  if (error || !data) return null
+  return { warehouseId: (data as any).warehouse_id as string }
+}
+
+/** Tìm sản phẩm theo tên trong MỘT kho (bỏ qua bản ghi đã xóa mềm) */
+export async function findProductByNameInWarehouse(name: string, warehouseId: string): Promise<{ id: number } | null> {
+  const normalized = (name || '').trim()
+  if (!normalized || !warehouseId) return null
+  // ilike (không wildcard) = so sánh chính xác, không phân biệt hoa/thường
+  const { data, error } = await supabase
+    .from('products')
+    .select('id')
+    .eq('warehouse_id', warehouseId)
+    .ilike('name', normalized)
+    .eq('is_deleted', false)
+    .limit(1)
+    .maybeSingle()
+  if (error || !data) return null
+  return { id: (data as any).id as number }
+}
+
 /** Tạo sản phẩm mới (nhập liệu) */
 export async function createProduct(product: Omit<Product, 'id'> & { warehouseId: string }): Promise<Product | null> {
   const { data, error } = await supabase

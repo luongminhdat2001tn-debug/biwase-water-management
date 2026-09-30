@@ -36,18 +36,41 @@ export default function HistoryPage() {
   // Dữ liệu từ Supabase đã sắp xếp mới nhất lên đầu
   // KHÔNG dùng .reverse() để giữ nguyên thứ tự
   // ------------------------------------------
+  // Parse "YYYY-MM-DD" (từ <input type="date">) thành local midnight.
+  // new Date("2026-09-25") parse theo UTC -> lệch 7h ở VN, làm mất ngày trùng.
+  const parseDateInputAsLocal = (s: string): Date => {
+    const [y, m, d] = s.split('-').map(Number)
+    return new Date(y, m - 1, d)
+  }
+  // Parse ngày của entry ("d/m/yyyy" từ vi-VN hoặc "yyyy-mm-dd") thành local midnight
+  const parseEntryDate = (s: string): Date => {
+    const str = s.trim()
+    if (str.includes('/')) {
+      const [d, m, y] = str.split('/').map(Number)
+      return new Date(y, m - 1, d)
+    }
+    if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+      return parseDateInputAsLocal(str.slice(0, 10))
+    }
+    const d = new Date(str)
+    d.setHours(0, 0, 0, 0)
+    return d
+  }
   const filteredHistory = historyLog.filter((entry) => {
-    // Lọc theo khoảng ngày
+    // Lọc theo khoảng ngày (so sánh theo ngày local, bao gồm cả biên)
     if (dateFrom || dateTo) {
-      const parts = entry.date.includes('/') ? entry.date.split('/') : entry.date.split('-')
-      let entryDate: Date
-      if (entry.date.includes('/')) {
-        entryDate = new Date(Number(parts[2]), Number(parts[1]) - 1, Number(parts[0]))
-      } else {
-        entryDate = new Date(entry.date)
+      const entryDate = parseEntryDate(entry.date)
+      entryDate.setHours(0, 0, 0, 0)
+      if (dateFrom) {
+        const from = parseDateInputAsLocal(dateFrom)
+        from.setHours(0, 0, 0, 0)
+        if (entryDate < from) return false
       }
-      if (dateFrom && entryDate < new Date(dateFrom)) return false
-      if (dateTo) { const to = new Date(dateTo); to.setHours(23, 59, 59); if (entryDate > to) return false }
+      if (dateTo) {
+        const to = parseDateInputAsLocal(dateTo)
+        to.setHours(23, 59, 59, 999)
+        if (entryDate > to) return false
+      }
     }
 
     // Lọc theo mã sản phẩm
