@@ -39,8 +39,6 @@ export default function WarehousePage() {
     name: '',
     unit: '',
     quantity: '' as any,
-    priceIn: '' as any,
-    priceOut: '' as any,
     weight: '' as any,
     weightUnit: 'kg',
     location: '',
@@ -172,7 +170,7 @@ export default function WarehousePage() {
     setModalType('import')
     setDuplicateInfo(null)
     setDuplicateName(false)
-    setFormData({ code: '', name: '', unit: '', quantity: '', priceIn: '', priceOut: '', weight: '', weightUnit: 'kg', location: '', locationImage: '', productImage: '', importDate: new Date().toISOString().split('T')[0] })
+    setFormData({ code: '', name: '', unit: '', quantity: '', weight: '', weightUnit: 'kg', location: '', locationImage: '', productImage: '', importDate: new Date().toISOString().split('T')[0] })
     setProductImageFile(null)
     setLocationImageFile(null)
     setIsModalOpen(true)
@@ -209,11 +207,9 @@ export default function WarehousePage() {
     if (product) {
       setFoundProduct(product)
       setExportQuantity(0)
-      setExportPrice(product.priceOut)
     } else {
       setFoundProduct(null)
       setExportQuantity(0)
-      setExportPrice(0)
     }
   }
 
@@ -292,8 +288,6 @@ export default function WarehousePage() {
       name: product.name,
       unit: product.unit,
       quantity: product.quantity,
-      priceIn: product.priceIn,
-      priceOut: product.priceOut,
       weight: product.weight,
       weightUnit: product.weightUnit || 'kg',
       location: product.location,
@@ -377,7 +371,7 @@ export default function WarehousePage() {
         userName: user?.name || user?.username || '',
         action: 'Nhập liệu',
         quantity: Number(formData.quantity) || 0,
-        details: `Nhập ${formData.quantity} ${formData.unit}, giá ${Number(formData.priceIn).toLocaleString('vi-VN')}đ`,
+        details: `Nhập ${formData.quantity} ${formData.unit}`,
       })
     }
     setIsSaving(false)
@@ -512,8 +506,6 @@ export default function WarehousePage() {
                       <th className="text-left py-3 px-4 font-semibold text-gray-700">Tên Hàng</th>
                       <th className="text-left py-3 px-4 font-semibold text-gray-700">ĐVT</th>
                       <th className="text-right py-3 px-4 font-semibold text-gray-700">Số Lượng</th>
-                      <th className="text-right py-3 px-4 font-semibold text-gray-700">Giá Nhập</th>
-                      <th className="text-right py-3 px-4 font-semibold text-gray-700">Giá Xuất</th>
                       <th className="text-right py-3 px-4 font-semibold text-gray-700">Khối Lượng</th>
                       <th className="text-left py-3 px-4 font-semibold text-gray-700">Vị Trí</th>
                     </tr>
@@ -539,12 +531,6 @@ export default function WarehousePage() {
                           <td className="py-3 px-4 text-gray-600">{item.unit}</td>
                           <td className="py-3 px-4 text-right font-medium text-gray-800">
                             {item.quantity.toLocaleString()}
-                          </td>
-                          <td className="py-3 px-4 text-right text-gray-600">
-                            {item.priceIn.toLocaleString('vi-VN')} đ
-                          </td>
-                          <td className="py-3 px-4 text-right text-green-600 font-medium">
-                            {item.priceOut.toLocaleString('vi-VN')} đ
                           </td>
                           <td className="py-3 px-4 text-right text-gray-600">
                             {item.weight} {item.weightUnit || 'kg'}
@@ -630,28 +616,6 @@ export default function WarehousePage() {
                       inputMode="numeric"
                       value={formData.quantity || ''}
                       onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ''); setFormData({ ...formData, quantity: v ? parseInt(v) : '' as any }) }}
-                      className="border-2"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Giá nhập (VNĐ)</label>
-                    <Input
-                      type="text"
-                      inputMode="numeric"
-                      value={formData.priceIn ? Number(formData.priceIn).toLocaleString('vi-VN') : ''}
-                      onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ''); setFormData({ ...formData, priceIn: v ? parseInt(v) : '' as any }) }}
-                      className="border-2"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Giá xuất (VNĐ)</label>
-                    <Input
-                      type="text"
-                      inputMode="numeric"
-                      value={formData.priceOut ? Number(formData.priceOut).toLocaleString('vi-VN') : ''}
-                      onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ''); setFormData({ ...formData, priceOut: v ? parseInt(v) : '' as any }) }}
                       className="border-2"
                     />
                   </div>
@@ -810,8 +774,6 @@ export default function WarehousePage() {
                               ['Tên hàng', foundProduct.name],
                               ['Đơn vị tính', foundProduct.unit],
                               ['Tồn kho', `${foundProduct.quantity.toLocaleString()} ${foundProduct.unit}`],
-                              ['Giá nhập', `${foundProduct.priceIn.toLocaleString('vi-VN')} đ`],
-                              ['Giá xuất', `${foundProduct.priceOut.toLocaleString('vi-VN')} đ`],
                               ['Khối lượng', `${foundProduct.weight} ${foundProduct.weightUnit || 'kg'}`],
                               ['Vị trí', foundProduct.location],
                             ].map(([l, v]) => (

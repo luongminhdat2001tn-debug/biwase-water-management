@@ -57,8 +57,6 @@ export interface Product {
   name: string
   unit: string
   quantity: number
-  priceIn: number
-  priceOut: number
   weight: number
   weightUnit?: string     // Đơn vị trọng lượng (kg, g, lít, ml, chai...)
   location: string

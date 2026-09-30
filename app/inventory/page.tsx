@@ -26,7 +26,7 @@ export default function InventoryPage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [editFormData, setEditFormData] = useState({
-    code: '', name: '', unit: '', quantity: 0, priceIn: 0, priceOut: 0, weight: 0, weightUnit: 'kg', location: '', locationImage: '', productImage: '', importDate: ''
+    code: '', name: '', unit: '', quantity: 0, weight: 0, weightUnit: 'kg', location: '', locationImage: '', productImage: '', importDate: ''
   })
   const [productImageFile, setProductImageFile] = useState<File | null>(null)
   const [locationImageFile, setLocationImageFile] = useState<File | null>(null)
@@ -63,7 +63,7 @@ export default function InventoryPage() {
     setEditingProduct(product)
     setEditFormData({
       code: product.code, name: product.name, unit: product.unit, quantity: product.quantity,
-      priceIn: product.priceIn, priceOut: product.priceOut, weight: product.weight,
+      weight: product.weight,
       weightUnit: product.weightUnit || 'kg',
       location: product.location, locationImage: product.locationImage, productImage: product.productImage || '', importDate: product.importDate,
     })
@@ -98,8 +98,6 @@ export default function InventoryPage() {
       if (old.location !== editFormData.location) changes.push(`Vị trí: ${old.location} → ${editFormData.location}`)
       if (old.locationImage !== locationImageUrl) changes.push('Ảnh vị trí: đã cập nhật')
       if ((old.productImage || '') !== productImageUrl) changes.push('Ảnh sản phẩm: đã cập nhật')
-      if (old.priceIn !== editFormData.priceIn) changes.push(`Giá nhập: ${old.priceIn.toLocaleString()} → ${editFormData.priceIn.toLocaleString()}`)
-      if (old.priceOut !== editFormData.priceOut) changes.push(`Giá xuất: ${old.priceOut.toLocaleString()} → ${editFormData.priceOut.toLocaleString()}`)
     }
 
     // Cập nhật DB (giữ nguyên quantity)
@@ -301,8 +299,6 @@ export default function InventoryPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="p-3 bg-gray-50 rounded-xl"><p className="text-sm text-gray-500 mb-1">Đơn vị tính</p><p className="font-medium">{selectedProduct.unit}</p></div>
                   <div className="p-3 bg-gray-50 rounded-xl"><p className="text-sm text-gray-500 mb-1">Số lượng tồn</p><p className="font-bold text-green-600">{selectedProduct.quantity.toLocaleString()} {selectedProduct.unit}</p></div>
-                  <div className="p-3 bg-gray-50 rounded-xl"><p className="text-sm text-gray-500 mb-1">Giá nhập</p><p className="font-medium">{selectedProduct.priceIn.toLocaleString('vi-VN')} đ</p></div>
-                  <div className="p-3 bg-gray-50 rounded-xl"><p className="text-sm text-gray-500 mb-1">Giá xuất</p><p className="font-medium">{selectedProduct.priceOut.toLocaleString('vi-VN')} đ</p></div>
                   <div className="p-3 bg-gray-50 rounded-xl"><p className="text-sm text-gray-500 mb-1">Khối lượng</p><p className="font-medium">{selectedProduct.weight} {selectedProduct.weightUnit}</p></div>
                   <div className="p-3 bg-gray-50 rounded-xl"><p className="text-sm text-gray-500 mb-1">Vị trí</p><p className="font-medium">{selectedProduct.location}</p></div>
                   <div className="p-3 bg-gray-50 rounded-xl col-span-2"><p className="text-sm text-gray-500 mb-1">Ngày nhập liệu</p><p className="font-medium">{selectedProduct.importDate}</p></div>
@@ -328,8 +324,6 @@ export default function InventoryPage() {
                   <div><label className="block text-sm font-medium text-gray-700 mb-1">Tên hàng</label><Input value={editFormData.name} onChange={(e) => setEditFormData({...editFormData, name: e.target.value})} className="border-2" /></div>
                   <div><label className="block text-sm font-medium text-gray-700 mb-1">Đơn vị tính</label><Input value={editFormData.unit} onChange={(e) => setEditFormData({...editFormData, unit: e.target.value})} className="border-2" /></div>
                   <div><label className="block text-sm font-medium text-gray-700 mb-1">Số lượng (không thể sửa)</label><Input type="number" value={editFormData.quantity} className="border-2 bg-gray-100 cursor-not-allowed" disabled /></div>
-                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Giá nhập (VNĐ)</label><Input type="number" value={editFormData.priceIn} onChange={(e) => setEditFormData({...editFormData, priceIn: Number(e.target.value)})} className="border-2" /></div>
-                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Giá xuất (VNĐ)</label><Input type="number" value={editFormData.priceOut} onChange={(e) => setEditFormData({...editFormData, priceOut: Number(e.target.value)})} className="border-2" /></div>
                   <div><label className="block text-sm font-medium text-gray-700 mb-1">Khối lượng</label>
                     <div className="flex gap-2">
                       <Input type="number" step="0.1" value={editFormData.weight} onChange={(e) => setEditFormData({...editFormData, weight: Number(e.target.value)})} className="border-2 flex-1" />

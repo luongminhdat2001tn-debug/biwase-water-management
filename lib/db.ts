@@ -168,8 +168,6 @@ export async function createProduct(product: Omit<Product, 'id'> & { warehouseId
       name: product.name,
       unit: product.unit,
       quantity: product.quantity,
-      price_in: product.priceIn,
-      price_out: product.priceOut,
       weight: product.weight,
       weight_unit: product.weightUnit || 'kg',
       location: product.location,
@@ -190,8 +188,6 @@ export async function updateProduct(id: number, updates: Partial<Product>): Prom
   if (updates.name !== undefined) dbUpdates.name = updates.name
   if (updates.unit !== undefined) dbUpdates.unit = updates.unit
   if (updates.quantity !== undefined) dbUpdates.quantity = updates.quantity
-  if (updates.priceIn !== undefined) dbUpdates.price_in = updates.priceIn
-  if (updates.priceOut !== undefined) dbUpdates.price_out = updates.priceOut
   if (updates.weight !== undefined) dbUpdates.weight = updates.weight
   if (updates.weightUnit !== undefined) dbUpdates.weight_unit = updates.weightUnit
   if (updates.location !== undefined) dbUpdates.location = updates.location
@@ -396,8 +392,6 @@ function mapProductFromDB(row: any): Product {
     name: row.name || '',
     unit: row.unit || '',
     quantity: row.quantity || 0,
-    priceIn: row.price_in || 0,
-    priceOut: row.price_out || 0,
     weight: parseFloat(row.weight) || 0,
     weightUnit: row.weight_unit || 'kg',
     location: row.location || '',
