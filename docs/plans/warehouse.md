@@ -46,3 +46,33 @@ Steps:
 
 Scope guard: no `Product` interface change, no `lib/db.ts` change, no migration,
 history page reads existing `details` column.
+
+## Plan: Per-Warehouse Tab Visibility (English)
+
+**Goal:** Warehouse page shows only tabs + data the account may access.
+
+**Architecture:** Filter the existing local `WAREHOUSES` array with
+`canAccessWarehouse` from Task 1 (`docs/plans/account.md`); default selection and
+fallback follow the filtered list; empty list renders a notice card.
+
+**Tech Stack:** Next.js 16 client component, existing `lib/db.ts` loaders.
+
+**Spec:** `docs/specs/warehouse.md` section "Per-Warehouse Tab Visibility";
+IDs + access rule in `docs/specs/account.md`.
+
+### Task 3: Filter tabs + default selection in `app/warehouse/page.tsx`
+
+**Files:**
+- Modify: `app/warehouse/page.tsx` (tab list, selection state, empty notice)
+
+**Interfaces:**
+- Consumes: `canAccessWarehouse` from `lib/constants.ts` (Task 1).
+- Produces: filtered tab UI; no new exports.
+
+- [ ] Step 1: Import `canAccessWarehouse` from `@/lib/constants`. After `user` is set, compute `visibleWarehouses = WAREHOUSES.filter(w => canAccessWarehouse(user, w.id))` (guard `user === null` with full list until session loads to avoid flash of notice).
+- [ ] Step 2: Default `selectedWarehouse` to the first accessible warehouse in `WAREHOUSES` order once `user` loads (replace hardcoded `'kho-vat-tu'` initial + mount-time `loadProducts('kho-vat-tu')`).
+- [ ] Step 3: Add fallback — if `selectedWarehouse` is not in the accessible list, reset to the first accessible one (covers mid-session permission change).
+- [ ] Step 4: Render tabs from `visibleWarehouses`; when empty, render notice card `Bạn không có quyền truy cập kho nào. Vui lòng liên hệ quản trị viên.` instead of the product table card.
+- [ ] Step 5: Run `npm run build`. Expected: builds clean; re-read diff for type slips (build ignores them).
+- [ ] Step 6: Manual checklist from `docs/specs/account.md` items 2-5 (1-tab account, 2-tab switching, no-access notice, admin sees all).
+- [ ] Step 7: Commit (`git add app/warehouse/page.tsx`, message `feat: filter warehouse tabs by permission`).

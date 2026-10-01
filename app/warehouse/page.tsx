@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Package, Plus, Edit2, Trash2, Search, X, Save, Warehouse, Factory, ShoppingBag, Building, Upload, LogIn, LogOut, FlaskConical, RefreshCw } from 'lucide-react'
-import { type Product } from '@/lib/constants'
+import { type Product, canAccessWarehouse } from '@/lib/constants'
 import { getProductsByWarehouse, createProduct, updateProduct, deleteProduct, addHistoryEntry, uploadImage, findProductByCode, normalizeProductCode, findProductByNameInWarehouse } from '@/lib/db'
 
 const WAREHOUSES = [
@@ -179,13 +179,27 @@ export default function WarehousePage() {
   useEffect(() => {
     const userData = localStorage.getItem('user')
     if (!userData) { window.location.href = '/'; return }
-    setUser(JSON.parse(userData))
-    loadProducts('kho-vat-tu')
+    const parsed = JSON.parse(userData)
+    setUser(parsed)
+    // Kho mặc định = kho đầu tiên user được phép truy cập (theo thứ tự tab)
+    const firstAccessible = WAREHOUSES.find(w => canAccessWarehouse(parsed, w.id))?.id || ''
+    setSelectedWarehouse(firstAccessible)
+    if (firstAccessible) loadProducts(firstAccessible)
   }, [])
 
-  // Reload khi đổi kho
+  // Fallback: nếu kho đang chọn không còn được phép (đổi quyền giữa phiên),
+  // chuyển về kho đầu tiên được phép
   useEffect(() => {
-    if (user) loadProducts(selectedWarehouse)
+    if (!user) return
+    if (!canAccessWarehouse(user, selectedWarehouse)) {
+      const firstAccessible = WAREHOUSES.find(w => canAccessWarehouse(user, w.id))?.id || ''
+      setSelectedWarehouse(firstAccessible)
+    }
+  }, [user])
+
+  // Reload khi đổi kho (bỏ qua khi chưa có kho nào được phép)
+  useEffect(() => {
+    if (user && selectedWarehouse) loadProducts(selectedWarehouse)
   }, [selectedWarehouse])
 
   const filteredItems = products.filter(
@@ -195,6 +209,10 @@ export default function WarehousePage() {
   )
 
   const currentWarehouse = WAREHOUSES.find(w => w.id === selectedWarehouse)
+  // Chỉ hiện tab của các kho user được phép truy cập (admin = tất cả)
+  const visibleWarehouses = user
+    ? WAREHOUSES.filter(w => canAccessWarehouse(user, w.id))
+    : WAREHOUSES
 
   // ------------------------------------------
   // Mở modal Nhập liệu mới
@@ -466,9 +484,9 @@ export default function WarehousePage() {
             <h1 className="text-3xl font-bold text-gray-800">Quản Lý Kho</h1>
           </div>
 
-          {/* Warehouse Tabs */}
+          {/* Warehouse Tabs (chỉ kho được phép) */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            {WAREHOUSES.map((warehouse) => {
+            {visibleWarehouses.map((warehouse) => {
               const Icon = warehouse.icon
               const isSelected = selectedWarehouse === warehouse.id
               const colorClasses = {
@@ -495,7 +513,15 @@ export default function WarehousePage() {
             })}
           </div>
 
-          {/* Product Table */}
+          {/* Product Table (hoặc thông báo khi không có quyền kho nào) */}
+          {visibleWarehouses.length === 0 ? (
+            <Card className="border-l-4 border-l-red-500">
+              <CardContent className="p-8 text-center">
+                <Warehouse className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                <p className="text-gray-600 font-medium">Bạn không có quyền truy cập kho nào. Vui lòng liên hệ quản trị viên.</p>
+              </CardContent>
+            </Card>
+          ) : (
           <Card className={`border-l-4 ${
               currentWarehouse?.color === 'blue' ? 'border-l-blue-600' :
               currentWarehouse?.color === 'orange' ? 'border-l-orange-500' :
@@ -599,6 +625,7 @@ export default function WarehousePage() {
               </div>
             </CardContent>
           </Card>
+          )}
 
           {/* ============================================================ */}
           {/* MODAL - Nhập Liệu Mới / Sửa Sản Phẩm                          */}

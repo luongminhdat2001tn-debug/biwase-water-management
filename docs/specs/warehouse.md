@@ -45,6 +45,21 @@ Shared shell via `components/sidebar.tsx`. All Supabase access via `lib/db.ts`.
 - Files: `app/warehouse/page.tsx` (+ this spec). No changes to `lib/db.ts`,
   `lib/constants.ts`, `supabase/schema.sql`, or history page.
 
+## Feature: Per-Warehouse Tab Visibility (via warehouse permission IDs)
+- Tabs render from `visibleWarehouses = WAREHOUSES.filter(w => canAccessWarehouse(user, w.id))`
+  (`canAccessWarehouse` / `getAccessibleWarehouseIds` in `lib/constants.ts`;
+  admin bypasses, others need the matching ID in `chucNang`).
+- Default `selectedWarehouse` is the user's first accessible warehouse in `WAREHOUSES`
+  array order (not hardcoded `kho-vat-tu`); initial `loadProducts` loads that warehouse. If the current selection
+  ever becomes inaccessible, fall back to the first accessible one.
+- Empty access: render a notice card
+  `Bạn không có quyền truy cập kho nào. Vui lòng liên hệ quản trị viên.`
+  instead of the product table.
+- No changes to product search, import/export/addmore modals, `loadProducts`, inventory
+  page, history page, sidebar, or auth. Tab filtering inherently scopes data because
+  everything loads per selected warehouse.
+- Permission IDs are defined in `docs/specs/account.md`.
+
 ## Validation Rules
 - Empty = `''`, `null`, `undefined`, or whitespace-only for strings.
 - `quantity` / `weight`: empty string counts as missing; `0` is treated as missing
