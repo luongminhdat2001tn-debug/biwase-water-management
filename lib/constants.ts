@@ -85,31 +85,6 @@ export interface HistoryEntry {
 }
 
 // ------------------------------------------
-// INTERFACE NHÂN VIÊN
-// ------------------------------------------
-export interface Employee {
-  id: number
-  hoTen: string
-  ngaySinh: string
-  gioiTinh: string
-  cccd: string
-  ngayCapCCCD: string
-  noiCapCCCD: string
-  soDienThoai?: string
-  ngayThuViec: string
-  ngayChinhThuc: string
-  ngayHetHD: string
-  loaiHD: string
-  trinhDo: string
-  chucVu: string
-  truongDaoTao: string
-  namTotNghiep: string
-  diaChi: string
-  username?: string
-  ghiChu?: string
-}
-
-// ------------------------------------------
 // HELPER: Lấy tên chức năng từ ID
 // ------------------------------------------
 export function getChucNangName(id: string): string {

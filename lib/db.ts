@@ -9,14 +9,13 @@
 //   - accounts: Tài khoản người dùng
 //   - products: Sản phẩm trong kho
 //   - history_log: Lịch sử thao tác kho
-//   - employees: Hồ sơ nhân viên
 //
 // STORAGE:
 //   - Bucket 'images': Lưu ảnh sản phẩm + ảnh vị trí
 // ==========================================
 
 import { supabase } from './supabase'
-import type { Account, Product, HistoryEntry, Employee } from './constants'
+import type { Account, Product, HistoryEntry } from './constants'
 
 // ==========================================
 // ACCOUNTS - Tài khoản
@@ -247,82 +246,6 @@ export async function addHistoryEntry(entry: Omit<HistoryEntry, 'id'>): Promise<
 }
 
 // ==========================================
-// EMPLOYEES - Nhân viên
-// ==========================================
-
-/** Lấy tất cả nhân viên */
-export async function getEmployeesFromDB(): Promise<Employee[]> {
-  const { data, error } = await supabase
-    .from('employees')
-    .select('*')
-    .order('id', { ascending: true })
-  if (error) { console.error('getEmployees error:', error); return [] }
-  return (data || []).map(mapEmployeeFromDB)
-}
-
-/** Tìm nhân viên theo username (cho dashboard) */
-export async function getEmployeeByUsername(username: string): Promise<Employee | null> {
-  const { data, error } = await supabase
-    .from('employees')
-    .select('*')
-    .eq('username', username)
-    .single()
-  if (error || !data) return null
-  return mapEmployeeFromDB(data)
-}
-
-/** Tạo nhân viên mới */
-export async function createEmployee(emp: Omit<Employee, 'id'>): Promise<Employee | null> {
-  const { data, error } = await supabase
-    .from('employees')
-    .insert(mapEmployeeToDB(emp))
-    .select()
-    .single()
-  if (error) { console.error('createEmployee error:', error); return null }
-  return mapEmployeeFromDB(data)
-}
-
-/** Cập nhật nhân viên */
-export async function updateEmployee(id: number, emp: Partial<Employee>): Promise<boolean> {
-  const dbUpdates: any = {}
-  if (emp.hoTen !== undefined) dbUpdates.ho_ten = emp.hoTen
-  if (emp.ngaySinh !== undefined) dbUpdates.ngay_sinh = emp.ngaySinh || null
-  if (emp.gioiTinh !== undefined) dbUpdates.gioi_tinh = emp.gioiTinh || null
-  if (emp.cccd !== undefined) dbUpdates.cccd = emp.cccd || null
-  if (emp.ngayCapCCCD !== undefined) dbUpdates.ngay_cap_cccd = emp.ngayCapCCCD || null
-  if (emp.noiCapCCCD !== undefined) dbUpdates.noi_cap_cccd = emp.noiCapCCCD || null
-  if (emp.soDienThoai !== undefined) dbUpdates.so_dien_thoai = emp.soDienThoai || null
-  if (emp.ngayThuViec !== undefined) dbUpdates.ngay_thu_viec = emp.ngayThuViec || null
-  if (emp.ngayChinhThuc !== undefined) dbUpdates.ngay_chinh_thuc = emp.ngayChinhThuc || null
-  if (emp.ngayHetHD !== undefined) dbUpdates.ngay_het_hd = emp.ngayHetHD || null
-  if (emp.loaiHD !== undefined) dbUpdates.loai_hd = emp.loaiHD || null
-  if (emp.trinhDo !== undefined) dbUpdates.trinh_do = emp.trinhDo
-  if (emp.chucVu !== undefined) dbUpdates.chuc_vu = emp.chucVu
-  if (emp.truongDaoTao !== undefined) dbUpdates.truong_dao_tao = emp.truongDaoTao
-  if (emp.namTotNghiep !== undefined) dbUpdates.nam_tot_nghiep = emp.namTotNghiep
-  if (emp.diaChi !== undefined) dbUpdates.dia_chi = emp.diaChi
-  if (emp.username !== undefined) dbUpdates.username = emp.username
-  if (emp.ghiChu !== undefined) dbUpdates.ghi_chu = emp.ghiChu
-
-  const { error } = await supabase
-    .from('employees')
-    .update(dbUpdates)
-    .eq('id', id)
-  if (error) { console.error('updateEmployee error:', error); return false }
-  return true
-}
-
-/** Xóa nhân viên */
-export async function deleteEmployeeFromDB(id: number): Promise<boolean> {
-  const { error } = await supabase
-    .from('employees')
-    .delete()
-    .eq('id', id)
-  if (error) { console.error('deleteEmployee error:', error); return false }
-  return true
-}
-
-// ==========================================
 // IMAGE UPLOAD - Upload ảnh lên Supabase Storage
 // ==========================================
 
@@ -412,52 +335,5 @@ function mapHistoryFromDB(row: any): HistoryEntry {
     action: row.action || '',
     quantity: row.quantity || 0,
     details: row.details || '',
-  }
-}
-
-function mapEmployeeFromDB(row: any): Employee {
-  return {
-    id: row.id,
-    hoTen: row.ho_ten || '',
-    ngaySinh: row.ngay_sinh || '',
-    gioiTinh: row.gioi_tinh || '',
-    cccd: row.cccd || '',
-    ngayCapCCCD: row.ngay_cap_cccd || '',
-    noiCapCCCD: row.noi_cap_cccd || '',
-    soDienThoai: row.so_dien_thoai || '',
-    ngayThuViec: row.ngay_thu_viec || '',
-    ngayChinhThuc: row.ngay_chinh_thuc || '',
-    ngayHetHD: row.ngay_het_hd || '',
-    loaiHD: row.loai_hd || '',
-    trinhDo: row.trinh_do || '',
-    chucVu: row.chuc_vu || '',
-    truongDaoTao: row.truong_dao_tao || '',
-    namTotNghiep: row.nam_tot_nghiep || '',
-    diaChi: row.dia_chi || '',
-    username: row.username || '',
-    ghiChu: row.ghi_chu || '',
-  }
-}
-
-function mapEmployeeToDB(emp: any): any {
-  return {
-    ho_ten: emp.hoTen,
-    ngay_sinh: emp.ngaySinh || null,
-    gioi_tinh: emp.gioiTinh || null,
-    cccd: emp.cccd || null,
-    ngay_cap_cccd: emp.ngayCapCCCD || null,
-    noi_cap_cccd: emp.noiCapCCCD || null,
-    so_dien_thoai: emp.soDienThoai || null,
-    ngay_thu_viec: emp.ngayThuViec || null,
-    ngay_chinh_thuc: emp.ngayChinhThuc || null,
-    ngay_het_hd: emp.ngayHetHD || null,
-    loai_hd: emp.loaiHD || null,
-    trinh_do: emp.trinhDo || null,
-    chuc_vu: emp.chucVu || null,
-    truong_dao_tao: emp.truongDaoTao || null,
-    nam_tot_nghiep: emp.namTotNghiep || null,
-    dia_chi: emp.diaChi || null,
-    username: emp.username || null,
-    ghi_chu: emp.ghiChu || null,
   }
 }
