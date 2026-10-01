@@ -55,7 +55,7 @@ export default function WarehousePage() {
   // (hiện sau khi bấm Lưu, tự xóa từng ô khi user sửa lại)
   const [formErrors, setFormErrors] = useState<{
     code?: string; name?: string; unit?: string; quantity?: string
-    weight?: string; location?: string; importDate?: string
+    weight?: string; weightUnit?: string; location?: string; importDate?: string
   }>({})
 
   // Xóa lỗi đỏ của 1 ô khi user bắt đầu sửa
@@ -68,7 +68,7 @@ export default function WarehousePage() {
     })
   }
 
-  // Kiểm tra 7 trường bắt buộc, trả về object lỗi (rỗng = hợp lệ)
+  // Kiểm tra 8 trường bắt buộc, trả về object lỗi (rỗng = hợp lệ)
   const validateForm = () => {
     const errors: typeof formErrors = {}
     if (!String(formData.code || '').trim()) errors.code = 'Vui lòng nhập mã hàng'
@@ -76,6 +76,7 @@ export default function WarehousePage() {
     if (!String(formData.unit || '').trim()) errors.unit = 'Vui lòng nhập đơn vị tính'
     if (formData.quantity === '' || formData.quantity === null || formData.quantity === undefined || Number(formData.quantity) <= 0) errors.quantity = 'Vui lòng nhập số lượng lớn hơn 0'
     if (formData.weight === '' || formData.weight === null || formData.weight === undefined || Number(formData.weight) <= 0) errors.weight = 'Vui lòng nhập khối lượng lớn hơn 0'
+    if (!String(formData.weightUnit || '').trim()) errors.weightUnit = 'Vui lòng nhập đơn vị khối lượng'
     if (!String(formData.location || '').trim()) errors.location = 'Vui lòng nhập vị trí'
     if (!String(formData.importDate || '').trim()) errors.importDate = 'Vui lòng chọn ngày nhập liệu'
     return errors
@@ -373,7 +374,7 @@ export default function WarehousePage() {
 
   // Lưu sản phẩm (thêm mới hoặc cập nhật)
   const handleSave = async () => {
-    // Kiểm tra 7 trường bắt buộc -> hiện cảnh báo đỏ từng ô, chặn lưu
+    // Kiểm tra 8 trường bắt buộc -> hiện cảnh báo đỏ từng ô, chặn lưu
     const errors = validateForm()
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors)
@@ -722,13 +723,16 @@ export default function WarehousePage() {
                       <Input
                         type="text"
                         value={formData.weightUnit}
-                        onChange={(e) => setFormData({ ...formData, weightUnit: e.target.value })}
-                        className="border-2 w-28"
+                        onChange={(e) => { setFormData({ ...formData, weightUnit: e.target.value }); clearFieldError('weightUnit') }}
+                        className={`border-2 w-28 ${formErrors.weightUnit ? 'border-red-500 bg-red-50 focus:ring-red-400' : ''}`}
                         placeholder="Đơn vị"
                       />
                     </div>
                     {formErrors.weight && (
                       <p className="text-red-600 text-xs mt-1 font-medium">⚠️ {formErrors.weight}</p>
+                    )}
+                    {formErrors.weightUnit && (
+                      <p className="text-red-600 text-xs mt-1 font-medium">⚠️ {formErrors.weightUnit}</p>
                     )}
                     <p className="text-xs text-gray-400 mt-1">VD: kg, g, lít, ml, chai, lon, bao...</p>
                   </div>

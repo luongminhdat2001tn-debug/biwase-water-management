@@ -21,10 +21,10 @@ export const CHUC_NANG_LIST = [
   { id: 'ton-kho', name: 'Tồn kho', description: 'Có thể chỉnh sửa thông tin sản phẩm tồn kho' },
   { id: 'them-tai-khoan', name: 'Thêm tài khoản', description: 'Có thể thêm/sửa/xóa tài khoản' },
   { id: 'quan-ly-nhan-su', name: 'Quản lý nhân sự', description: 'Có thể thêm/sửa thông tin nhân viên' },
-  { id: 'kho-vat-tu', name: 'Kho Vật Tư Nhà Máy', description: 'Kho vật tư của nhà máy' },
-  { id: 'kho-xay-dung', name: 'Kho Xây Dựng Cơ Bản', description: 'Kho xây dựng cơ bản' },
-  { id: 'kho-phong-thi-nghiem', name: 'Kho Phòng Thí Nghiệm', description: 'Kho phòng thí nghiệm' },
-  { id: 'kho-thuong-mai', name: 'Kho Thương Mại', description: 'Kho thương mại' },
+  { id: 'kho-vat-tu', name: 'Kho Vật Tư Nhà Máy', description: 'Có quyền truy cập kho vật tư của nhà máy' },
+  { id: 'kho-xay-dung', name: 'Kho Xây Dựng Cơ Bản', description: 'Có quyền truy cập kho xây dựng cơ bản' },
+  { id: 'kho-phong-thi-nghiem', name: 'Kho Phòng Thí Nghiệm', description: 'Có quyền truy cập kho phòng thí nghiệm' },
+  { id: 'kho-thuong-mai', name: 'Kho Thương Mại', description: 'Có quyền truy cập kho thương mại' },
 ]
 
 // ------------------------------------------

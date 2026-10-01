@@ -6,11 +6,13 @@ Shared shell via `components/sidebar.tsx`. All Supabase access via `lib/db.ts`.
 
 ## Feature: Red Alert for Mandatory Fields in "Nhap Lieu" Form
 - Modal: `modalType === 'import'` (used for both create + edit).
-- Mandatory fields (7): `code` (Ma hang), `name` (Ten hang), `unit` (Don vi tinh),
-  `quantity` (So luong), `weight` (Khoi luong), `location` (Vi tri), `importDate` (Ngay nhap lieu).
-- Optional: `weightUnit` (default `kg`), `productImage`, `locationImage`.
+- Mandatory fields (8): `code` (Ma hang), `name` (Ten hang), `unit` (Don vi tinh),
+  `quantity` (So luong), `weight` (Khoi luong), `weightUnit` (Don vi khoi luong, non-empty),
+  `location` (Vi tri), `importDate` (Ngay nhap lieu).
+- Optional: `productImage`, `locationImage`. `weightUnit` still initializes to `kg`,
+  but clearing it blocks save with `Vui lòng nhập đơn vị khối lượng`.
 - Behavior (approved):
-  - On Save (`handleSave`), validate all 7 fields first. If any empty, show inline red alert
+  - On Save (`handleSave`), validate all 8 fields first. If any empty, show inline red alert
     per field and block save (no Supabase calls, no generic `alert()` for missing fields).
   - Visual reuses existing duplicate-warning pattern: input `border-red-500 bg-red-50`
     + message `<p class="text-red-600 text-xs mt-1">...</p>` (Vietnamese).
@@ -67,7 +69,8 @@ Shared shell via `components/sidebar.tsx`. All Supabase access via `lib/db.ts`.
 - `importDate`: required, `type="date"` input.
 
 ## Manual Test Checklist
-1. Open Nhap Lieu empty -> Save -> 7 red messages appear, save blocked.
+1. Open Nhap Lieu empty -> Save -> 7 red messages appear (weightUnit prefilled `kg`), save blocked.
+2. Clear Đơn vị khối lượng too -> Save -> 8 red messages including `Vui lòng nhập đơn vị khối lượng`, save blocked.
 2. Fill fields one by one -> each red clears live.
 3. Valid form -> saves and creates history entry.
 4. Edit mode: clear one mandatory field -> Save blocked with red.
