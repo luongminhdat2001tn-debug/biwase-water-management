@@ -1,17 +1,26 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Sidebar } from '@/components/sidebar'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { History, Calendar, Search, X, FileSpreadsheet } from 'lucide-react'
 import * as XLSX from 'xlsx'
-import { type HistoryEntry } from '@/lib/constants'
+import { type HistoryEntry, getAccessibleWarehouseIds } from '@/lib/constants'
 import { getHistoryLog } from '@/lib/db'
 
 // Danh sách các chức năng để lọc
 const ACTION_OPTIONS = ['Tất cả', 'Nhập liệu', 'Xuất kho', 'Tồn kho']
+
+// Map ID kho -> tên hiển thị dài, phải khớp từng ký tự với giá trị
+// lưu trong history_log.warehouse (do trang warehouse/inventory ghi)
+const WAREHOUSE_NAMES: Record<string, string> = {
+  'kho-vat-tu': 'Kho Vật Tư Nhà Máy',
+  'kho-xay-dung': 'Kho Xây Dựng Cơ Bản',
+  'kho-phong-thi-nghiem': 'Kho Phòng Thí Nghiệm',
+  'kho-thuong-mai': 'Kho Thương Mại',
+}
 
 export default function HistoryPage() {
   const [user, setUser] = useState<any>(null)
@@ -30,6 +39,31 @@ export default function HistoryPage() {
     setUser(JSON.parse(userData))
     getHistoryLog().then(data => setHistoryLog(data))
   }, [])
+
+  // Danh sách kho mà tài khoản được phép truy cập (theo chucNang trong session)
+  const accessibleWarehouses = useMemo(() => {
+    const ids = getAccessibleWarehouseIds(user)
+    return ids.map((id) => ({ id, name: WAREHOUSE_NAMES[id] || id }))
+  }, [user])
+  // Tập tên kho được phép (để ẩn cứng dòng không có quyền)
+  const accessibleNames = useMemo(() => new Set(accessibleWarehouses.map((w) => w.name)), [accessibleWarehouses])
+  const hasAllWarehouses = accessibleWarehouses.length === 4
+  // Giá trị mặc định: đủ 4 kho hoặc 2-3 kho -> "Tất cả" (gộp trong phạm vi cho phép);
+  // 1 kho -> kho đó; 0 kho -> rỗng
+  const defaultWarehouseFilter = useMemo(() => {
+    if (accessibleWarehouses.length === 0) return ''
+    if (accessibleWarehouses.length === 1) return accessibleWarehouses[0].name
+    return 'Tất cả'
+  }, [accessibleWarehouses])
+
+  // Đồng bộ giá trị mặc định sau khi user load xong (chỉ 1 lần, không ghi đè lựa chọn tay)
+  const warehouseInitRef = useRef(false)
+  useEffect(() => {
+    if (user && !warehouseInitRef.current) {
+      warehouseInitRef.current = true
+      setFilterWarehouse(defaultWarehouseFilter)
+    }
+  }, [user, defaultWarehouseFilter])
 
   // ------------------------------------------
   // Lọc kết hợp: ngày, mã SP, tên SP, chức năng
@@ -79,8 +113,9 @@ export default function HistoryPage() {
     // Lọc theo tên sản phẩm
     if (filterName && !entry.productName.toLowerCase().includes(filterName.toLowerCase())) return false
 
-    // Lọc theo tên kho
-    if (filterWarehouse && !entry.warehouse.toLowerCase().includes(filterWarehouse.toLowerCase())) return false
+    // Lọc theo kho: lớp 1 ẩn cứng kho không có quyền, lớp 2 theo dropdown (khớp chính xác)
+    if (!hasAllWarehouses && !accessibleNames.has(entry.warehouse)) return false
+    if (filterWarehouse && filterWarehouse !== 'Tất cả' && entry.warehouse !== filterWarehouse) return false
 
     // Lọc theo chức năng
     if (filterAction !== 'Tất cả' && entry.action !== filterAction) return false
@@ -88,14 +123,14 @@ export default function HistoryPage() {
     return true
   })
 
-  const hasFilter = dateFrom || dateTo || filterCode || filterName || filterWarehouse || filterAction !== 'Tất cả'
+  const hasFilter = dateFrom || dateTo || filterCode || filterName || filterWarehouse !== defaultWarehouseFilter || filterAction !== 'Tất cả'
 
   const clearAllFilters = () => {
     setDateFrom('')
     setDateTo('')
     setFilterCode('')
     setFilterName('')
-    setFilterWarehouse('')
+    setFilterWarehouse(defaultWarehouseFilter)
     setFilterAction('Tất cả')
   }
 
@@ -197,12 +232,24 @@ export default function HistoryPage() {
                   </div>                
                   <div className="flex items-center gap-2">
                     <label className="text-sm text-gray-600 whitespace-nowrap">Kho Lưu:</label>
-                    <Input
+                    <select
                       value={filterWarehouse}
                       onChange={(e) => setFilterWarehouse(e.target.value)}
-                      placeholder="Nhập tên kho..."
-                      className="border-2 w-48"
-                    />
+                      className="border-2 border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-orange-400"
+                    >
+                      {accessibleWarehouses.length === 0 ? (
+                        <option value="">Không có quyền</option>
+                      ) : (
+                        <>
+                          {accessibleWarehouses.length > 1 && (
+                            <option value="Tất cả">Tất cả</option>
+                          )}
+                          {accessibleWarehouses.map((w) => (
+                            <option key={w.id} value={w.name}>{w.name}</option>
+                          ))}
+                        </>
+                      )}
+                    </select>
                   </div>                    
                   <div className="flex items-center gap-2">
                     <label className="text-sm text-gray-600 whitespace-nowrap">Chức năng:</label>
