@@ -5,10 +5,11 @@ import { Sidebar } from '@/components/sidebar'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { History, Calendar, Search, X, FileSpreadsheet } from 'lucide-react'
+import { History, Calendar, Search, X, FileSpreadsheet, Printer } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { type HistoryEntry, getAccessibleWarehouseIds } from '@/lib/constants'
-import { getHistoryLog } from '@/lib/db'
+import { getHistoryLog, getAllProducts } from '@/lib/db'
+import type { RowData } from './preview-print-file'
 
 // Danh sách các chức năng để lọc
 const ACTION_OPTIONS = ['Tất cả', 'Nhập liệu', 'Xuất kho', 'Tồn kho']
@@ -25,6 +26,8 @@ const WAREHOUSE_NAMES: Record<string, string> = {
 export default function HistoryPage() {
   const [user, setUser] = useState<any>(null)
   const [historyLog, setHistoryLog] = useState<HistoryEntry[]>([])
+  // Map mã SP (lowercase) -> ĐVT để in phiếu (tra từ bảng products)
+  const [unitMap, setUnitMap] = useState<Record<string, string>>({})
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   // Bộ lọc mới
@@ -38,6 +41,14 @@ export default function HistoryPage() {
     if (!userData) { window.location.href = '/'; return }
     setUser(JSON.parse(userData))
     getHistoryLog().then(data => setHistoryLog(data))
+    // Tải ĐVT sản phẩm để map khi in phiếu (MÃ KHO dùng giá trị TEST)
+    getAllProducts().then(grouped => {
+      const map: Record<string, string> = {}
+      Object.values(grouped).flat().forEach(p => {
+        if (p.code) map[p.code.trim().toLowerCase()] = p.unit
+      })
+      setUnitMap(map)
+    })
   }, [])
 
   // Danh sách kho mà tài khoản được phép truy cập (theo chucNang trong session)
@@ -168,6 +179,22 @@ export default function HistoryPage() {
     XLSX.writeFile(wb, fileName)
   }
 
+  // Mở phiếu xuất kho ở tab mới (dữ liệu = filteredHistory hiện tại)
+  // MÃ KHO dùng giá trị TEST, ĐVT tra từ products, NỘI DUNG = details
+  const handlePrintPhieu = () => {
+    const rows: RowData[] = filteredHistory.map((entry, index) => ({
+      id: index,
+      wh: 'TEST',
+      code: entry.productCode,
+      name: entry.productName,
+      unit: unitMap[(entry.productCode || '').trim().toLowerCase()] || '—',
+      qty: entry.quantity,
+      note: entry.details || `${entry.action} ${entry.quantity} sản phẩm`,
+    }))
+    sessionStorage.setItem('phieu-xuat-kho', JSON.stringify(rows))
+    window.open('/history/print', '_blank')
+  }
+
   const getActionColor = (action: string) => {
     switch (action) {
       case 'Nhập liệu': return 'bg-green-100 text-green-700'
@@ -282,9 +309,14 @@ export default function HistoryPage() {
                   <History className="w-5 h-5" /> Lịch Sử Hoạt Động ({filteredHistory.length} bản ghi)
                 </CardTitle>
                 {filteredHistory.length > 0 && (
-                  <Button onClick={handleExportExcel} className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white cursor-pointer">
-                    <FileSpreadsheet className="w-4 h-4" /> Xuất Excel
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button onClick={handlePrintPhieu} className="flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white cursor-pointer">
+                      <Printer className="w-4 h-4" /> Xuất Phiếu Kho
+                    </Button>
+                    <Button onClick={handleExportExcel} className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white cursor-pointer">
+                      <FileSpreadsheet className="w-4 h-4" /> Xuất Excel
+                    </Button>
+                  </div>
                 )}
               </div>
             </CardHeader>

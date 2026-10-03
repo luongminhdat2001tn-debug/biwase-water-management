@@ -21,8 +21,22 @@ History page (`app/history/page.tsx`) shows `history_log` entries (newest first)
 - Legacy/unknown `entry.warehouse` values (empty string or names not matching any known warehouse): hidden when the user has < 4 accessible warehouses; shown under "Tất cả" only for full-access users. (Keeps old data visible to admins while hiding it from restricted accounts.)
 - No schema change, no change to `lib/db.ts` or `lib/constants.ts` (reuse existing helpers). Vietnamese UI labels unchanged.
 
+## Feature: "Xuất Phiếu Kho" Button (print voucher via preview-print-file)
+- Location: `app/history/page.tsx` CardHeader, to the LEFT of the green `Xuất Excel` button. Both buttons visible only when `filteredHistory.length > 0`, wrapped in a `flex gap-2` container.
+- Data scope: uses current `filteredHistory` as-is (all actions, respecting active filters). No extra action filtering.
+- Row mapping (`HistoryEntry` -> `RowData` for `preview-print-file.tsx`):
+  - `wh` = `"TEST"` (hardcoded test value per user decision).
+  - `code` = `entry.productCode`, `name` = `entry.productName`, `qty` = `entry.quantity`, `note` (`NỘI DUNG`) = `entry.details`.
+  - `unit` (`ĐVT`) = looked up from `products` table by `productCode` via `getAllProducts()` (`Product.unit`); fallback `"—"` when not found. (User phrasing: "map the quantity field of the product" interpreted as the product's unit field.)
+- Header of voucher: unchanged template — `Số: 080`, recipient blank `...`, address `Nhà máy`, date = today (`currentDate` logic already in preview file).
+- Open behavior: click -> `sessionStorage.setItem('phieu-xuat-kho', JSON.stringify(rows))` -> `window.open('/history/print', '_blank')` for immediate printing. New route `app/history/print/page.tsx` reads from `sessionStorage` and renders refactored `<PreviewPrintFile rows={...} />` (empty-state message if opened directly).
+- Refactor `app/history/preview-print-file.tsx`: accept `props { rows: RowData[] }` instead of internal mock `originalData`; remove demo-only `Tạo 1.000 dòng` / `Khôi phục mẫu` generator; keep zoom + `In phiếu (window.print())` + A4 `@page` CSS. Export `RowData` type.
+- No schema change, no change to `lib/constants.ts`; DB reads go through `lib/db.ts` (`getHistoryLog` + `getAllProducts` for unit lookup). Vietnamese UI labels unchanged.
+
 ## Files
-- Modify: `app/history/page.tsx` (filter state, options memo, `<select>` UI, two-layer filter).
+- Modify: `app/history/page.tsx` (filter state, options memo, `<select>` UI, two-layer filter; plus print button + unit lookup + `handlePrintPhieu`).
+- Modify: `app/history/preview-print-file.tsx` (props-based rows, remove demo data generator).
+- Create: `app/history/print/page.tsx` (new-tab print host reading from `sessionStorage`).
 - Create: this spec (`docs/specs/history.md`).
 
 ## Manual Test Checklist
