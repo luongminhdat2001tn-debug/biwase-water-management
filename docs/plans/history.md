@@ -65,6 +65,23 @@
 
 ---
 
+### Task 4: Map warehouse name to MÃ KHO code in "Xuất Phiếu Kho"
+
+**Files:**
+- Modify: `app/history/page.tsx` (`WAREHOUSE_CODES` + `handlePrintPhieu`)
+- Reference: `docs/specs/history.md` (Feature: "Xuất Phiếu Kho" Button — `wh` mapping)
+
+**Interfaces:**
+- Consumes: existing `WAREHOUSE_NAMES` long names + per-row `entry.warehouse`.
+- Produces: `RowData[].wh` as `VT` / `XD` / `TN` / `TM`, fallback to full name as-is.
+
+- [ ] Step 1: Add `WAREHOUSE_CODES: Record<string, string>` next to `WAREHOUSE_NAMES` (`Kho Vật Tư Nhà Máy` -> `VT`, `Kho Xây Dựng Cơ Bản` -> `XD`, `Kho Phòng Thí Nghiệm` -> `TN`, `Kho Thương Mại` -> `TM`) with Vietnamese comment; reuse `WAREHOUSE_NAMES` display strings as keys (no new source of truth, no `lib/constants.ts` change).
+- [ ] Step 2: In `handlePrintPhieu`, change `wh: 'TEST'` to `wh: WAREHOUSE_CODES[entry.warehouse] ?? entry.warehouse` (per-row lookup; trim-safe if needed); update the two stale `TEST` comments.
+- [ ] Step 3: Self-review diff; run `npm run build`. Expected: builds clean.
+- [ ] Step 4: Manual test: filter each warehouse -> print -> MÃ KHO shows VT/XD/TN/TM; "Tất cả" shows mixed codes per row; legacy/unknown name shows full name.
+
+---
+
 ### Task 3: Pin signature grid to bottom of last printed page in `preview-print-file.tsx`
 
 **Files:**

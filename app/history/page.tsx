@@ -23,6 +23,14 @@ const WAREHOUSE_NAMES: Record<string, string> = {
   'kho-thuong-mai': 'Kho Thương Mại',
 }
 
+// Map tên kho dài -> MÃ KHO in trên phiếu xuất kho
+const WAREHOUSE_CODES: Record<string, string> = {
+  'Kho Vật Tư Nhà Máy': 'VT',
+  'Kho Xây Dựng Cơ Bản': 'XD',
+  'Kho Phòng Thí Nghiệm': 'TN',
+  'Kho Thương Mại': 'TM',
+}
+
 export default function HistoryPage() {
   const [user, setUser] = useState<any>(null)
   const [historyLog, setHistoryLog] = useState<HistoryEntry[]>([])
@@ -41,7 +49,7 @@ export default function HistoryPage() {
     if (!userData) { window.location.href = '/'; return }
     setUser(JSON.parse(userData))
     getHistoryLog().then(data => setHistoryLog(data))
-    // Tải ĐVT sản phẩm để map khi in phiếu (MÃ KHO dùng giá trị TEST)
+    // Tải ĐVT sản phẩm để map khi in phiếu (MÃ KHO tra từ WAREHOUSE_CODES)
     getAllProducts().then(grouped => {
       const map: Record<string, string> = {}
       Object.values(grouped).flat().forEach(p => {
@@ -180,11 +188,11 @@ export default function HistoryPage() {
   }
 
   // Mở phiếu xuất kho ở tab mới (dữ liệu = filteredHistory hiện tại)
-  // MÃ KHO dùng giá trị TEST, ĐVT tra từ products, NỘI DUNG = details
+  // MÃ KHO tra từ WAREHOUSE_CODES theo tên kho, ĐVT tra từ products, NỘI DUNG = details
   const handlePrintPhieu = () => {
     const rows: RowData[] = filteredHistory.map((entry, index) => ({
       id: index,
-      wh: 'TEST',
+      wh: WAREHOUSE_CODES[entry.warehouse] ?? entry.warehouse,
       code: entry.productCode,
       name: entry.productName,
       unit: unitMap[(entry.productCode || '').trim().toLowerCase()] || '—',

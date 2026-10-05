@@ -25,7 +25,7 @@ History page (`app/history/page.tsx`) shows `history_log` entries (newest first)
 - Location: `app/history/page.tsx` CardHeader, to the LEFT of the green `Xuất Excel` button. Both buttons visible only when `filteredHistory.length > 0`, wrapped in a `flex gap-2` container.
 - Data scope: uses current `filteredHistory` as-is (all actions, respecting active filters). No extra action filtering.
 - Row mapping (`HistoryEntry` -> `RowData` for `preview-print-file.tsx`):
-  - `wh` = `"TEST"` (hardcoded test value per user decision).
+  - `wh` (`MÃ KHO`) = warehouse code derived per-row from `entry.warehouse` via `WAREHOUSE_CODES` map co-located with `WAREHOUSE_NAMES` in `app/history/page.tsx`: `Kho Vật Tư Nhà Máy` -> `VT`, `Kho Xây Dựng Cơ Bản` -> `XD`, `Kho Phòng Thí Nghiệm` -> `TN`, `Kho Thương Mại` -> `TM`. Fallback: unknown/legacy/empty `entry.warehouse` shows full name as-is (`?? entry.warehouse`) so no data is lost.
   - `code` = `entry.productCode`, `name` = `entry.productName`, `qty` = `entry.quantity`, `note` (`NỘI DUNG`) = `entry.details`.
   - `unit` (`ĐVT`) = looked up from `products` table by `productCode` via `getAllProducts()` (`Product.unit`); fallback `"—"` when not found. (User phrasing: "map the quantity field of the product" interpreted as the product's unit field.)
 - Header of voucher: unchanged template — `Số: 080`, recipient blank `...`, address `Nhà máy`, date = today (`currentDate` logic already in preview file).
