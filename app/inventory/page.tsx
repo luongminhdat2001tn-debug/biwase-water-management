@@ -1,13 +1,13 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Sidebar } from '@/components/sidebar'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Archive, Factory, Building, ShoppingBag, FlaskConical, Search, Eye, X, Edit2, Trash2, Save, Upload } from 'lucide-react'
 import { type Product } from '@/lib/constants'
-import { getAllProducts, updateProduct, deleteProduct, addHistoryEntry, uploadImage } from '@/lib/db'
+import { getAllProducts, updateProduct, deleteProduct, addHistoryEntry, uploadImage, findProductByCode, normalizeProductCode, findProductByNameInWarehouse } from '@/lib/db'
 
 const WAREHOUSES = [
   { id: 'kho-vat-tu', name: 'Kho Vật Tư Nhà Máy', icon: Factory, color: 'blue' },
@@ -26,11 +26,115 @@ export default function InventoryPage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [editFormData, setEditFormData] = useState({
-    code: '', name: '', unit: '', quantity: 0, priceIn: 0, priceOut: 0, weight: 0, weightUnit: 'kg', location: '', locationImage: '', productImage: '', importDate: ''
+    code: '', name: '', unit: '', quantity: 0, weight: 0, weightUnit: 'kg', location: '', locationImage: '', productImage: '', importDate: ''
   })
   const [productImageFile, setProductImageFile] = useState<File | null>(null)
   const [locationImageFile, setLocationImageFile] = useState<File | null>(null)
   const [isSaving, setIsSaving] = useState(false)
+
+  // ------------------------------------------
+  // Trạng thái trùng mã (toàn hệ thống) + trùng tên (trong kho hiện tại)
+  // khi sửa sản phẩm tồn kho. Giữ nguyên giá trị gốc thì cho qua,
+  // đổi sang giá trị mới phải chưa tồn tại (trừ chính nó).
+  // ------------------------------------------
+  const [duplicateInfo, setDuplicateInfo] = useState<{ warehouseId: string; warehouseName: string } | null>(null)
+  const [checkingCode, setCheckingCode] = useState(false)
+  const latestCodeRef = useRef('')
+  const [duplicateName, setDuplicateName] = useState(false)
+  const [checkingName, setCheckingName] = useState(false)
+  const latestNameRef = useRef('')
+
+  // Lỗi đỏ cho 7 trường bắt buộc trong form Sửa tồn kho
+  // (hiện sau khi bấm Cập Nhật, tự xóa từng ô khi user sửa lại)
+  const [editFormErrors, setEditFormErrors] = useState<{
+    code?: string; name?: string; unit?: string
+    weight?: string; weightUnit?: string; location?: string; importDate?: string
+  }>({})
+
+  // Xóa lỗi đỏ của 1 ô khi user bắt đầu sửa
+  const clearEditFieldError = (field: keyof typeof editFormErrors) => {
+    setEditFormErrors((prev) => {
+      if (!prev[field]) return prev
+      const next = { ...prev }
+      delete next[field]
+      return next
+    })
+  }
+
+  // Kiểm tra 7 trường bắt buộc, trả về object lỗi (rỗng = hợp lệ)
+  const validateEditForm = () => {
+    const errors: typeof editFormErrors = {}
+    if (!String(editFormData.code || '').trim()) errors.code = 'Vui lòng nhập mã hàng'
+    if (!String(editFormData.name || '').trim()) errors.name = 'Vui lòng nhập tên hàng'
+    if (!String(editFormData.unit || '').trim()) errors.unit = 'Vui lòng nhập đơn vị tính'
+    if (editFormData.weight === '' || editFormData.weight === null || editFormData.weight === undefined || Number(editFormData.weight) <= 0) errors.weight = 'Vui lòng nhập khối lượng lớn hơn 0'
+    if (!String(editFormData.weightUnit || '').trim()) errors.weightUnit = 'Vui lòng nhập đơn vị khối lượng'
+    if (!String(editFormData.location || '').trim()) errors.location = 'Vui lòng nhập vị trí'
+    if (!String(editFormData.importDate || '').trim()) errors.importDate = 'Vui lòng chọn ngày nhập liệu'
+    return errors
+  }
+
+  // Map warehouseId -> tên kho hiển thị
+  const warehouseNameById = (id: string) => WAREHOUSES.find(w => w.id === id)?.name || id
+
+  // Kiểm tra mã trùng toàn hệ thống (bỏ qua chính SP đang sửa)
+  const checkDuplicateCodeForEdit = async (code: string) => {
+    if (!editingProduct) { setDuplicateInfo(null); return null }
+    const normalized = normalizeProductCode(code)
+    if (!normalized) { setDuplicateInfo(null); return null }
+    // Giữ nguyên mã gốc (không phân biệt hoa/thường, khoảng trắng) thì OK
+    if (normalized === normalizeProductCode(editingProduct.code)) { setDuplicateInfo(null); return null }
+    latestCodeRef.current = normalized
+    setCheckingCode(true)
+    try {
+      const found = await findProductByCode(normalized)
+      if (latestCodeRef.current !== normalized) return duplicateInfo
+      const info = found ? { warehouseId: found.warehouseId, warehouseName: warehouseNameById(found.warehouseId) } : null
+      setDuplicateInfo(info)
+      return info
+    } finally {
+      setCheckingCode(false)
+    }
+  }
+
+  // Kiểm tra tên trùng trong kho hiện tại (bỏ qua chính SP đang sửa)
+  const checkDuplicateNameForEdit = async (name: string) => {
+    if (!editingProduct) { setDuplicateName(false); return false }
+    const normalized = (name || '').trim()
+    if (!normalized) { setDuplicateName(false); return false }
+    // Giữ nguyên tên gốc (không phân biệt hoa/thường) thì OK
+    if (normalized.toLowerCase() === (editingProduct.name || '').trim().toLowerCase()) { setDuplicateName(false); return false }
+    const requestKey = `${selectedWarehouse}||${normalized.toLowerCase()}`
+    latestNameRef.current = requestKey
+    setCheckingName(true)
+    try {
+      const found = await findProductByNameInWarehouse(normalized, selectedWarehouse)
+      if (latestNameRef.current !== requestKey) return duplicateName
+      const isDup = !!found && found.id !== editingProduct.id
+      setDuplicateName(isDup)
+      return isDup
+    } finally {
+      setCheckingName(false)
+    }
+  }
+
+  // Live-check khi sửa mã hàng (debounce 400ms)
+  useEffect(() => {
+    if (!isEditModalOpen || !editingProduct) return
+    const code = editFormData.code
+    if (!normalizeProductCode(code) || normalizeProductCode(code) === normalizeProductCode(editingProduct.code)) { setDuplicateInfo(null); return }
+    const t = setTimeout(() => { checkDuplicateCodeForEdit(code) }, 400)
+    return () => clearTimeout(t)
+  }, [editFormData.code, isEditModalOpen, editingProduct])
+
+  // Live-check khi sửa tên hàng (debounce 400ms)
+  useEffect(() => {
+    if (!isEditModalOpen || !editingProduct) return
+    const name = editFormData.name
+    if (!(name || '').trim() || (name || '').trim().toLowerCase() === (editingProduct.name || '').trim().toLowerCase()) { setDuplicateName(false); return }
+    const t = setTimeout(() => { checkDuplicateNameForEdit(name) }, 400)
+    return () => clearTimeout(t)
+  }, [editFormData.name, selectedWarehouse, isEditModalOpen, editingProduct])
 
   const loadAllProducts = async () => {
     const data = await getAllProducts()
@@ -63,18 +167,49 @@ export default function InventoryPage() {
     setEditingProduct(product)
     setEditFormData({
       code: product.code, name: product.name, unit: product.unit, quantity: product.quantity,
-      priceIn: product.priceIn, priceOut: product.priceOut, weight: product.weight,
+      weight: product.weight,
       weightUnit: product.weightUnit || 'kg',
       location: product.location, locationImage: product.locationImage, productImage: product.productImage || '', importDate: product.importDate,
     })
     setProductImageFile(null)
     setLocationImageFile(null)
+    setDuplicateInfo(null)
+    setDuplicateName(false)
+    setCheckingCode(false)
+    setCheckingName(false)
+    latestCodeRef.current = ''
+    latestNameRef.current = ''
+    setEditFormErrors({})
     setIsEditModalOpen(true)
   }
 
   const handleSaveEdit = async () => {
     if (!editingProduct) return
     setIsSaving(true)
+
+    // Kiểm tra 7 trường bắt buộc trước -> hiện cảnh báo đỏ từng ô, chặn lưu
+    const errors = validateEditForm()
+    if (Object.keys(errors).length > 0) {
+      setEditFormErrors(errors)
+      setIsSaving(false)
+      return
+    }
+    setEditFormErrors({})
+
+    // Chặn trùng mã toàn hệ thống + trùng tên trong cùng kho
+    // (giữ nguyên giá trị gốc thì cho qua, đổi sang giá trị đã tồn tại thì chặn)
+    const codeDup = await checkDuplicateCodeForEdit(editFormData.code)
+    if (codeDup) {
+      alert('Mã hàng này đã tồn tại. Vui lòng kiểm tra lại')
+      setIsSaving(false)
+      return
+    }
+    const nameDup = await checkDuplicateNameForEdit(editFormData.name)
+    if (nameDup) {
+      alert('Tên hàng này đã tồn tại. Vui lòng kiểm tra lại!')
+      setIsSaving(false)
+      return
+    }
 
     // Upload ảnh mới nếu có
     let productImageUrl = editFormData.productImage
@@ -98,8 +233,6 @@ export default function InventoryPage() {
       if (old.location !== editFormData.location) changes.push(`Vị trí: ${old.location} → ${editFormData.location}`)
       if (old.locationImage !== locationImageUrl) changes.push('Ảnh vị trí: đã cập nhật')
       if ((old.productImage || '') !== productImageUrl) changes.push('Ảnh sản phẩm: đã cập nhật')
-      if (old.priceIn !== editFormData.priceIn) changes.push(`Giá nhập: ${old.priceIn.toLocaleString()} → ${editFormData.priceIn.toLocaleString()}`)
-      if (old.priceOut !== editFormData.priceOut) changes.push(`Giá xuất: ${old.priceOut.toLocaleString()} → ${editFormData.priceOut.toLocaleString()}`)
     }
 
     // Cập nhật DB (giữ nguyên quantity)
@@ -301,8 +434,6 @@ export default function InventoryPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="p-3 bg-gray-50 rounded-xl"><p className="text-sm text-gray-500 mb-1">Đơn vị tính</p><p className="font-medium">{selectedProduct.unit}</p></div>
                   <div className="p-3 bg-gray-50 rounded-xl"><p className="text-sm text-gray-500 mb-1">Số lượng tồn</p><p className="font-bold text-green-600">{selectedProduct.quantity.toLocaleString()} {selectedProduct.unit}</p></div>
-                  <div className="p-3 bg-gray-50 rounded-xl"><p className="text-sm text-gray-500 mb-1">Giá nhập</p><p className="font-medium">{selectedProduct.priceIn.toLocaleString('vi-VN')} đ</p></div>
-                  <div className="p-3 bg-gray-50 rounded-xl"><p className="text-sm text-gray-500 mb-1">Giá xuất</p><p className="font-medium">{selectedProduct.priceOut.toLocaleString('vi-VN')} đ</p></div>
                   <div className="p-3 bg-gray-50 rounded-xl"><p className="text-sm text-gray-500 mb-1">Khối lượng</p><p className="font-medium">{selectedProduct.weight} {selectedProduct.weightUnit}</p></div>
                   <div className="p-3 bg-gray-50 rounded-xl"><p className="text-sm text-gray-500 mb-1">Vị trí</p><p className="font-medium">{selectedProduct.location}</p></div>
                   <div className="p-3 bg-gray-50 rounded-xl col-span-2"><p className="text-sm text-gray-500 mb-1">Ngày nhập liệu</p><p className="font-medium">{selectedProduct.importDate}</p></div>
@@ -324,21 +455,21 @@ export default function InventoryPage() {
                   ⚠️ Lưu ý: Số lượng tồn kho KHÔNG được phép thay đổi tại đây.
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Mã hàng</label><Input value={editFormData.code} onChange={(e) => setEditFormData({...editFormData, code: e.target.value})} className="border-2" /></div>
-                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Tên hàng</label><Input value={editFormData.name} onChange={(e) => setEditFormData({...editFormData, name: e.target.value})} className="border-2" /></div>
-                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Đơn vị tính</label><Input value={editFormData.unit} onChange={(e) => setEditFormData({...editFormData, unit: e.target.value})} className="border-2" /></div>
+                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Mã hàng *</label><Input value={editFormData.code} onChange={(e) => { setEditFormData({...editFormData, code: e.target.value}); clearEditFieldError('code') }} className={`border-2 ${duplicateInfo || editFormErrors.code ? 'border-red-500 bg-red-50' : ''}`} />{checkingCode && !duplicateInfo && !editFormErrors.code && (<p className="text-gray-500 text-xs mt-1">Đang kiểm tra...</p>)}{duplicateInfo && (<p className="text-red-600 text-xs mt-1 font-medium">⚠️ Mã hàng này đã tồn tại (tại {duplicateInfo.warehouseName}). Vui lòng kiểm tra lại</p>)}{editFormErrors.code && (<p className="text-red-600 text-xs mt-1 font-medium">⚠️ {editFormErrors.code}</p>)}</div>
+                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Tên hàng *</label><Input value={editFormData.name} onChange={(e) => { setEditFormData({...editFormData, name: e.target.value}); clearEditFieldError('name') }} className={`border-2 ${duplicateName || editFormErrors.name ? 'border-red-500 bg-red-50' : ''}`} />{checkingName && !duplicateName && !editFormErrors.name && (<p className="text-gray-500 text-xs mt-1">Đang kiểm tra...</p>)}{duplicateName && (<p className="text-red-600 text-xs mt-1 font-medium">⚠️ Tên hàng này đã tồn tại trong kho này. Vui lòng kiểm tra lại</p>)}{editFormErrors.name && (<p className="text-red-600 text-xs mt-1 font-medium">⚠️ {editFormErrors.name}</p>)}</div>
+                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Đơn vị tính *</label><Input value={editFormData.unit} onChange={(e) => { setEditFormData({...editFormData, unit: e.target.value}); clearEditFieldError('unit') }} className={`border-2 ${editFormErrors.unit ? 'border-red-500 bg-red-50' : ''}`} />{editFormErrors.unit && (<p className="text-red-600 text-xs mt-1 font-medium">⚠️ {editFormErrors.unit}</p>)}</div>
                   <div><label className="block text-sm font-medium text-gray-700 mb-1">Số lượng (không thể sửa)</label><Input type="number" value={editFormData.quantity} className="border-2 bg-gray-100 cursor-not-allowed" disabled /></div>
-                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Giá nhập (VNĐ)</label><Input type="number" value={editFormData.priceIn} onChange={(e) => setEditFormData({...editFormData, priceIn: Number(e.target.value)})} className="border-2" /></div>
-                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Giá xuất (VNĐ)</label><Input type="number" value={editFormData.priceOut} onChange={(e) => setEditFormData({...editFormData, priceOut: Number(e.target.value)})} className="border-2" /></div>
-                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Khối lượng</label>
+                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Khối lượng *</label>
                     <div className="flex gap-2">
-                      <Input type="number" step="0.1" value={editFormData.weight} onChange={(e) => setEditFormData({...editFormData, weight: Number(e.target.value)})} className="border-2 flex-1" />
-                      <Input type="text" value={editFormData.weightUnit} onChange={(e) => setEditFormData({...editFormData, weightUnit: e.target.value})} className="border-2 w-24" placeholder="Đơn vị" />
+                      <Input type="number" step="0.1" value={editFormData.weight} onChange={(e) => { setEditFormData({...editFormData, weight: Number(e.target.value)}); clearEditFieldError('weight') }} className={`border-2 flex-1 ${editFormErrors.weight ? 'border-red-500 bg-red-50' : ''}`} />
+                      <Input type="text" value={editFormData.weightUnit} onChange={(e) => { setEditFormData({...editFormData, weightUnit: e.target.value}); clearEditFieldError('weightUnit') }} className={`border-2 w-24 ${editFormErrors.weightUnit ? 'border-red-500 bg-red-50' : ''}`} placeholder="Đơn vị" />
                     </div>
+                    {editFormErrors.weight && (<p className="text-red-600 text-xs mt-1 font-medium">⚠️ {editFormErrors.weight}</p>)}
+                    {editFormErrors.weightUnit && (<p className="text-red-600 text-xs mt-1 font-medium">⚠️ {editFormErrors.weightUnit}</p>)}
                     <p className="text-xs text-gray-400 mt-1">VD: kg, g, lít, ml, chai...</p>
                   </div>
-                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Vị trí</label><Input value={editFormData.location} onChange={(e) => setEditFormData({...editFormData, location: e.target.value})} className="border-2" /></div>
-                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Ngày nhập liệu</label><Input type="date" value={editFormData.importDate} onChange={(e) => setEditFormData({...editFormData, importDate: e.target.value})} className="border-2" /></div>
+                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Vị trí *</label><Input value={editFormData.location} onChange={(e) => { setEditFormData({...editFormData, location: e.target.value}); clearEditFieldError('location') }} className={`border-2 ${editFormErrors.location ? 'border-red-500 bg-red-50' : ''}`} />{editFormErrors.location && (<p className="text-red-600 text-xs mt-1 font-medium">⚠️ {editFormErrors.location}</p>)}</div>
+                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Ngày nhập liệu *</label><Input type="date" value={editFormData.importDate} onChange={(e) => { setEditFormData({...editFormData, importDate: e.target.value}); clearEditFieldError('importDate') }} className={`border-2 ${editFormErrors.importDate ? 'border-red-500 bg-red-50' : ''}`} />{editFormErrors.importDate && (<p className="text-red-600 text-xs mt-1 font-medium">⚠️ {editFormErrors.importDate}</p>)}</div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">📷 Ảnh sản phẩm</label>
                     <div className="flex gap-4 items-start">
@@ -372,7 +503,7 @@ export default function InventoryPage() {
                 </div>
                 <div className="flex gap-3 mt-6">
                   <Button variant="outline" onClick={() => setIsEditModalOpen(false)} className="flex-1">Hủy</Button>
-                  <Button onClick={handleSaveEdit} className="flex-1 bg-blue-600 hover:bg-blue-700" disabled={isSaving}>
+                  <Button onClick={handleSaveEdit} className="flex-1 bg-blue-600 hover:bg-blue-700" disabled={isSaving || checkingCode || checkingName || !!duplicateInfo || duplicateName}>
                     <Save className="w-4 h-4 mr-2" /> {isSaving ? 'Đang cập nhật...' : 'Cập Nhật'}
                   </Button>
                 </div>

@@ -1,21 +1,41 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Sidebar } from '@/components/sidebar'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { History, Calendar, Search, X, FileSpreadsheet } from 'lucide-react'
+import { History, Calendar, Search, X, FileSpreadsheet, Printer } from 'lucide-react'
 import * as XLSX from 'xlsx'
-import { type HistoryEntry } from '@/lib/constants'
-import { getHistoryLog } from '@/lib/db'
+import { type HistoryEntry, getAccessibleWarehouseIds } from '@/lib/constants'
+import { getHistoryLog, getAllProducts } from '@/lib/db'
+import type { RowData } from './preview-print-file'
 
 // Danh sách các chức năng để lọc
 const ACTION_OPTIONS = ['Tất cả', 'Nhập liệu', 'Xuất kho', 'Tồn kho']
 
+// Map ID kho -> tên hiển thị dài, phải khớp từng ký tự với giá trị
+// lưu trong history_log.warehouse (do trang warehouse/inventory ghi)
+const WAREHOUSE_NAMES: Record<string, string> = {
+  'kho-vat-tu': 'Kho Vật Tư Nhà Máy',
+  'kho-xay-dung': 'Kho Xây Dựng Cơ Bản',
+  'kho-phong-thi-nghiem': 'Kho Phòng Thí Nghiệm',
+  'kho-thuong-mai': 'Kho Thương Mại',
+}
+
+// Map tên kho dài -> MÃ KHO in trên phiếu xuất kho
+const WAREHOUSE_CODES: Record<string, string> = {
+  'Kho Vật Tư Nhà Máy': 'VT',
+  'Kho Xây Dựng Cơ Bản': 'XD',
+  'Kho Phòng Thí Nghiệm': 'TN',
+  'Kho Thương Mại': 'TM',
+}
+
 export default function HistoryPage() {
   const [user, setUser] = useState<any>(null)
   const [historyLog, setHistoryLog] = useState<HistoryEntry[]>([])
+  // Map mã SP (lowercase) -> ĐVT để in phiếu (tra từ bảng products)
+  const [unitMap, setUnitMap] = useState<Record<string, string>>({})
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   // Bộ lọc mới
@@ -29,25 +49,81 @@ export default function HistoryPage() {
     if (!userData) { window.location.href = '/'; return }
     setUser(JSON.parse(userData))
     getHistoryLog().then(data => setHistoryLog(data))
+    // Tải ĐVT sản phẩm để map khi in phiếu (MÃ KHO tra từ WAREHOUSE_CODES)
+    getAllProducts().then(grouped => {
+      const map: Record<string, string> = {}
+      Object.values(grouped).flat().forEach(p => {
+        if (p.code) map[p.code.trim().toLowerCase()] = p.unit
+      })
+      setUnitMap(map)
+    })
   }, [])
+
+  // Danh sách kho mà tài khoản được phép truy cập (theo chucNang trong session)
+  const accessibleWarehouses = useMemo(() => {
+    const ids = getAccessibleWarehouseIds(user)
+    return ids.map((id) => ({ id, name: WAREHOUSE_NAMES[id] || id }))
+  }, [user])
+  // Tập tên kho được phép (để ẩn cứng dòng không có quyền)
+  const accessibleNames = useMemo(() => new Set(accessibleWarehouses.map((w) => w.name)), [accessibleWarehouses])
+  const hasAllWarehouses = accessibleWarehouses.length === 4
+  // Giá trị mặc định: đủ 4 kho hoặc 2-3 kho -> "Tất cả" (gộp trong phạm vi cho phép);
+  // 1 kho -> kho đó; 0 kho -> rỗng
+  const defaultWarehouseFilter = useMemo(() => {
+    if (accessibleWarehouses.length === 0) return ''
+    if (accessibleWarehouses.length === 1) return accessibleWarehouses[0].name
+    return 'Tất cả'
+  }, [accessibleWarehouses])
+
+  // Đồng bộ giá trị mặc định sau khi user load xong (chỉ 1 lần, không ghi đè lựa chọn tay)
+  const warehouseInitRef = useRef(false)
+  useEffect(() => {
+    if (user && !warehouseInitRef.current) {
+      warehouseInitRef.current = true
+      setFilterWarehouse(defaultWarehouseFilter)
+    }
+  }, [user, defaultWarehouseFilter])
 
   // ------------------------------------------
   // Lọc kết hợp: ngày, mã SP, tên SP, chức năng
   // Dữ liệu từ Supabase đã sắp xếp mới nhất lên đầu
   // KHÔNG dùng .reverse() để giữ nguyên thứ tự
   // ------------------------------------------
+  // Parse "YYYY-MM-DD" (từ <input type="date">) thành local midnight.
+  // new Date("2026-09-25") parse theo UTC -> lệch 7h ở VN, làm mất ngày trùng.
+  const parseDateInputAsLocal = (s: string): Date => {
+    const [y, m, d] = s.split('-').map(Number)
+    return new Date(y, m - 1, d)
+  }
+  // Parse ngày của entry ("d/m/yyyy" từ vi-VN hoặc "yyyy-mm-dd") thành local midnight
+  const parseEntryDate = (s: string): Date => {
+    const str = s.trim()
+    if (str.includes('/')) {
+      const [d, m, y] = str.split('/').map(Number)
+      return new Date(y, m - 1, d)
+    }
+    if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+      return parseDateInputAsLocal(str.slice(0, 10))
+    }
+    const d = new Date(str)
+    d.setHours(0, 0, 0, 0)
+    return d
+  }
   const filteredHistory = historyLog.filter((entry) => {
-    // Lọc theo khoảng ngày
+    // Lọc theo khoảng ngày (so sánh theo ngày local, bao gồm cả biên)
     if (dateFrom || dateTo) {
-      const parts = entry.date.includes('/') ? entry.date.split('/') : entry.date.split('-')
-      let entryDate: Date
-      if (entry.date.includes('/')) {
-        entryDate = new Date(Number(parts[2]), Number(parts[1]) - 1, Number(parts[0]))
-      } else {
-        entryDate = new Date(entry.date)
+      const entryDate = parseEntryDate(entry.date)
+      entryDate.setHours(0, 0, 0, 0)
+      if (dateFrom) {
+        const from = parseDateInputAsLocal(dateFrom)
+        from.setHours(0, 0, 0, 0)
+        if (entryDate < from) return false
       }
-      if (dateFrom && entryDate < new Date(dateFrom)) return false
-      if (dateTo) { const to = new Date(dateTo); to.setHours(23, 59, 59); if (entryDate > to) return false }
+      if (dateTo) {
+        const to = parseDateInputAsLocal(dateTo)
+        to.setHours(23, 59, 59, 999)
+        if (entryDate > to) return false
+      }
     }
 
     // Lọc theo mã sản phẩm
@@ -56,8 +132,9 @@ export default function HistoryPage() {
     // Lọc theo tên sản phẩm
     if (filterName && !entry.productName.toLowerCase().includes(filterName.toLowerCase())) return false
 
-    // Lọc theo tên kho
-    if (filterWarehouse && !entry.warehouse.toLowerCase().includes(filterWarehouse.toLowerCase())) return false
+    // Lọc theo kho: lớp 1 ẩn cứng kho không có quyền, lớp 2 theo dropdown (khớp chính xác)
+    if (!hasAllWarehouses && !accessibleNames.has(entry.warehouse)) return false
+    if (filterWarehouse && filterWarehouse !== 'Tất cả' && entry.warehouse !== filterWarehouse) return false
 
     // Lọc theo chức năng
     if (filterAction !== 'Tất cả' && entry.action !== filterAction) return false
@@ -65,14 +142,14 @@ export default function HistoryPage() {
     return true
   })
 
-  const hasFilter = dateFrom || dateTo || filterCode || filterName || filterWarehouse || filterAction !== 'Tất cả'
+  const hasFilter = dateFrom || dateTo || filterCode || filterName || filterWarehouse !== defaultWarehouseFilter || filterAction !== 'Tất cả'
 
   const clearAllFilters = () => {
     setDateFrom('')
     setDateTo('')
     setFilterCode('')
     setFilterName('')
-    setFilterWarehouse('')
+    setFilterWarehouse(defaultWarehouseFilter)
     setFilterAction('Tất cả')
   }
 
@@ -108,6 +185,22 @@ export default function HistoryPage() {
 
     const fileName = `LichSuKho_${new Date().toLocaleDateString('vi-VN').replace(/\//g, '-')}.xlsx`
     XLSX.writeFile(wb, fileName)
+  }
+
+  // Mở phiếu xuất kho ở tab mới (dữ liệu = filteredHistory hiện tại)
+  // MÃ KHO tra từ WAREHOUSE_CODES theo tên kho, ĐVT tra từ products, NỘI DUNG = details
+  const handlePrintPhieu = () => {
+    const rows: RowData[] = filteredHistory.map((entry, index) => ({
+      id: index,
+      wh: WAREHOUSE_CODES[entry.warehouse] ?? entry.warehouse,
+      code: entry.productCode,
+      name: entry.productName,
+      unit: unitMap[(entry.productCode || '').trim().toLowerCase()] || '—',
+      qty: entry.quantity,
+      note: entry.details || `${entry.action} ${entry.quantity} sản phẩm`,
+    }))
+    sessionStorage.setItem('phieu-xuat-kho', JSON.stringify(rows))
+    window.open('/history/print', '_blank')
   }
 
   const getActionColor = (action: string) => {
@@ -174,12 +267,24 @@ export default function HistoryPage() {
                   </div>                
                   <div className="flex items-center gap-2">
                     <label className="text-sm text-gray-600 whitespace-nowrap">Kho Lưu:</label>
-                    <Input
+                    <select
                       value={filterWarehouse}
                       onChange={(e) => setFilterWarehouse(e.target.value)}
-                      placeholder="Nhập tên kho..."
-                      className="border-2 w-48"
-                    />
+                      className="border-2 border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-orange-400"
+                    >
+                      {accessibleWarehouses.length === 0 ? (
+                        <option value="">Không có quyền</option>
+                      ) : (
+                        <>
+                          {accessibleWarehouses.length > 1 && (
+                            <option value="Tất cả">Tất cả</option>
+                          )}
+                          {accessibleWarehouses.map((w) => (
+                            <option key={w.id} value={w.name}>{w.name}</option>
+                          ))}
+                        </>
+                      )}
+                    </select>
                   </div>                    
                   <div className="flex items-center gap-2">
                     <label className="text-sm text-gray-600 whitespace-nowrap">Chức năng:</label>
@@ -212,9 +317,14 @@ export default function HistoryPage() {
                   <History className="w-5 h-5" /> Lịch Sử Hoạt Động ({filteredHistory.length} bản ghi)
                 </CardTitle>
                 {filteredHistory.length > 0 && (
-                  <Button onClick={handleExportExcel} className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white cursor-pointer">
-                    <FileSpreadsheet className="w-4 h-4" /> Xuất Excel
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button onClick={handlePrintPhieu} className="flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white cursor-pointer">
+                      <Printer className="w-4 h-4" /> Xuất Phiếu Kho
+                    </Button>
+                    <Button onClick={handleExportExcel} className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white cursor-pointer">
+                      <FileSpreadsheet className="w-4 h-4" /> Xuất Excel
+                    </Button>
+                  </div>
                 )}
               </div>
             </CardHeader>

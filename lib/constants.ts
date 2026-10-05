@@ -20,7 +20,10 @@ export const CHUC_NANG_LIST = [
   { id: 'xuat-kho', name: 'Xuất kho', description: 'Có thể xuất hàng ra khỏi kho' },
   { id: 'ton-kho', name: 'Tồn kho', description: 'Có thể chỉnh sửa thông tin sản phẩm tồn kho' },
   { id: 'them-tai-khoan', name: 'Thêm tài khoản', description: 'Có thể thêm/sửa/xóa tài khoản' },
-  { id: 'quan-ly-nhan-su', name: 'Quản lý nhân sự', description: 'Có thể thêm/sửa thông tin nhân viên' },
+  { id: 'kho-vat-tu', name: 'Kho Vật Tư Nhà Máy', description: 'Có quyền truy cập kho vật tư của nhà máy' },
+  { id: 'kho-xay-dung', name: 'Kho Xây Dựng Cơ Bản', description: 'Có quyền truy cập kho xây dựng cơ bản' },
+  { id: 'kho-phong-thi-nghiem', name: 'Kho Phòng Thí Nghiệm', description: 'Có quyền truy cập kho phòng thí nghiệm' },
+  { id: 'kho-thuong-mai', name: 'Kho Thương Mại', description: 'Có quyền truy cập kho thương mại' },
 ]
 
 // ------------------------------------------
@@ -57,8 +60,6 @@ export interface Product {
   name: string
   unit: string
   quantity: number
-  priceIn: number
-  priceOut: number
   weight: number
   weightUnit?: string     // Đơn vị trọng lượng (kg, g, lít, ml, chai...)
   location: string
@@ -83,31 +84,6 @@ export interface HistoryEntry {
 }
 
 // ------------------------------------------
-// INTERFACE NHÂN VIÊN
-// ------------------------------------------
-export interface Employee {
-  id: number
-  hoTen: string
-  ngaySinh: string
-  gioiTinh: string
-  cccd: string
-  ngayCapCCCD: string
-  noiCapCCCD: string
-  soDienThoai?: string
-  ngayThuViec: string
-  ngayChinhThuc: string
-  ngayHetHD: string
-  loaiHD: string
-  trinhDo: string
-  chucVu: string
-  truongDaoTao: string
-  namTotNghiep: string
-  diaChi: string
-  username?: string
-  ghiChu?: string
-}
-
-// ------------------------------------------
 // HELPER: Lấy tên chức năng từ ID
 // ------------------------------------------
 export function getChucNangName(id: string): string {
@@ -129,4 +105,24 @@ export function hasPermissionFromSession(permission: string): boolean {
   } catch {
     return false
   }
+}
+
+// ------------------------------------------
+// HELPER: Kiểm tra quyền truy cập kho (ID kho = ID quyền kho)
+// Admin luôn thấy tất cả kho; tài khoản thường cần ID kho trong chucNang
+// ------------------------------------------
+export function canAccessWarehouse(user: { isAdmin?: boolean; chucNang?: string[] | string } | null | undefined, warehouseId: string): boolean {
+  if (!user) return false
+  if (user.isAdmin) return true
+  const chucNang = Array.isArray(user.chucNang) ? user.chucNang : [user.chucNang || '']
+  return chucNang.includes(warehouseId)
+}
+
+// ------------------------------------------
+// HELPER: Danh sách ID kho mà user được phép truy cập
+// (theo thứ tự tab trong trang warehouse; Admin = tất cả)
+// ------------------------------------------
+export function getAccessibleWarehouseIds(user: { isAdmin?: boolean; chucNang?: string[] | string } | null | undefined): string[] {
+  const warehouseIds = ['kho-vat-tu', 'kho-xay-dung', 'kho-phong-thi-nghiem', 'kho-thuong-mai']
+  return warehouseIds.filter((id) => canAccessWarehouse(user, id))
 }

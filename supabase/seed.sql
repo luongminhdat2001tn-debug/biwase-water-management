@@ -8,12 +8,12 @@
 -- 1. TÀI KHOẢN MẪU (6 tài khoản)
 -- ==========================================
 INSERT INTO accounts (username, password, name, chuc_vu, chuc_nang, status, is_admin) VALUES
-  ('admin', 'admin123', 'Quản Trị Viên', 'Quản trị hệ thống', '{"xem-co-ban","nhap-kho","xuat-kho","ton-kho","them-tai-khoan","quan-ly-nhan-su"}', 'active', true),
-  ('kho', 'password123', 'Nguyễn Văn A', 'Nhân viên kho', '{"xem-co-ban","nhap-kho"}', 'active', false),
+  ('admin', 'admin123', 'Quản Trị Viên', 'Quản trị hệ thống', '{"xem-co-ban","nhap-lieu","xuat-kho","ton-kho","them-tai-khoan","quan-ly-nhan-su"}', 'active', true),
+  ('kho', 'password123', 'Nguyễn Văn A', 'Nhân viên kho', '{"xem-co-ban","nhap-lieu"}', 'active', false),
   ('hr', 'password123', 'Trần Thị B', 'Nhân viên nhân sự', '{"xem-co-ban","quan-ly-nhan-su"}', 'active', false),
   ('ketoan', 'password123', 'Lê Văn C', 'Kế toán', '{"xem-co-ban","ton-kho"}', 'active', false),
   ('truongphong', 'password123', 'Phạm Thị D', 'Trưởng phòng', '{"xem-co-ban","xuat-kho"}', 'active', false),
-  ('giamdoc', 'password123', 'Đặng Văn E', 'Giám đốc', '{"xem-co-ban","nhap-kho","xuat-kho","ton-kho","them-tai-khoan","quan-ly-nhan-su"}', 'active', false);
+  ('giamdoc', 'password123', 'Đặng Văn E', 'Giám đốc', '{"xem-co-ban","nhap-lieu","xuat-kho","ton-kho","them-tai-khoan","quan-ly-nhan-su"}', 'active', false);
 
 -- ==========================================
 -- 2. SẢN PHẨM KHO VẬT TƯ (5 sản phẩm)

@@ -1,13 +1,14 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Sidebar } from '@/components/sidebar'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Package, Plus, Edit2, Trash2, Search, X, Save, Warehouse, Factory, ShoppingBag, Building, Upload, LogIn, LogOut, FlaskConical, RefreshCw } from 'lucide-react'
-import { type Product } from '@/lib/constants'
-import { getProductsByWarehouse, createProduct, updateProduct, deleteProduct, addHistoryEntry, uploadImage } from '@/lib/db'
+import { type Product, canAccessWarehouse } from '@/lib/constants'
+import { getProductsByWarehouse, createProduct, updateProduct, deleteProduct, addHistoryEntry, uploadImage, findProductByCode, normalizeProductCode, findProductByNameInWarehouse } from '@/lib/db'
 
 const WAREHOUSES = [
   { id: 'kho-vat-tu', name: 'Kho Vật Tư Nhà Máy', icon: Factory, color: 'blue' },
@@ -29,7 +30,10 @@ export default function WarehousePage() {
   const [exportCodeInput, setExportCodeInput] = useState('')
   const [foundProduct, setFoundProduct] = useState<Product | null>(null)
   const [exportQuantity, setExportQuantity] = useState(0)
-  const [exportPrice, setExportPrice] = useState(0)
+  // Lý do xuất kho (bắt buộc) + lỗi đỏ inline cho số lượng / lý do
+  const [exportReason, setExportReason] = useState('')
+  const [exportQuantityError, setExportQuantityError] = useState('')
+  const [exportReasonError, setExportReasonError] = useState('')
   // isSaving: chặn bấm nút nhiều lần
   const [isSaving, setIsSaving] = useState(false)
 
@@ -39,8 +43,6 @@ export default function WarehousePage() {
     name: '',
     unit: '',
     quantity: '' as any,
-    priceIn: '' as any,
-    priceOut: '' as any,
     weight: '' as any,
     weightUnit: 'kg',
     location: '',
@@ -48,6 +50,37 @@ export default function WarehousePage() {
     productImage: '',
     importDate: new Date().toISOString().split('T')[0],
   })
+
+  // Lỗi đỏ cho các trường bắt buộc trong form Nhập liệu
+  // (hiện sau khi bấm Lưu, tự xóa từng ô khi user sửa lại)
+  const [formErrors, setFormErrors] = useState<{
+    code?: string; name?: string; unit?: string; quantity?: string
+    weight?: string; weightUnit?: string; location?: string; importDate?: string
+  }>({})
+
+  // Xóa lỗi đỏ của 1 ô khi user bắt đầu sửa
+  const clearFieldError = (field: keyof typeof formErrors) => {
+    setFormErrors((prev) => {
+      if (!prev[field]) return prev
+      const next = { ...prev }
+      delete next[field]
+      return next
+    })
+  }
+
+  // Kiểm tra 8 trường bắt buộc, trả về object lỗi (rỗng = hợp lệ)
+  const validateForm = () => {
+    const errors: typeof formErrors = {}
+    if (!String(formData.code || '').trim()) errors.code = 'Vui lòng nhập mã hàng'
+    if (!String(formData.name || '').trim()) errors.name = 'Vui lòng nhập tên hàng'
+    if (!String(formData.unit || '').trim()) errors.unit = 'Vui lòng nhập đơn vị tính'
+    if (formData.quantity === '' || formData.quantity === null || formData.quantity === undefined || Number(formData.quantity) <= 0) errors.quantity = 'Vui lòng nhập số lượng lớn hơn 0'
+    if (formData.weight === '' || formData.weight === null || formData.weight === undefined || Number(formData.weight) <= 0) errors.weight = 'Vui lòng nhập khối lượng lớn hơn 0'
+    if (!String(formData.weightUnit || '').trim()) errors.weightUnit = 'Vui lòng nhập đơn vị khối lượng'
+    if (!String(formData.location || '').trim()) errors.location = 'Vui lòng nhập vị trí'
+    if (!String(formData.importDate || '').trim()) errors.importDate = 'Vui lòng chọn ngày nhập liệu'
+    return errors
+  }
 
   // Trạng thái nhập kho số lượng
   const [addMoreCodeInput, setAddMoreCodeInput] = useState('')
@@ -59,12 +92,82 @@ export default function WarehousePage() {
   const [locationImageFile, setLocationImageFile] = useState<File | null>(null)
 
   // ------------------------------------------
-  // Kiểm tra trùng mã hàng trong kho hiện tại
-  // Chỉ kiểm tra khi THÊM MỚI, không kiểm tra khi sửa
+  // Trạng thái trùng mã toàn hệ thống (check qua DB cả 4 kho,
+  // không chỉ kho đang chọn). Chỉ dùng khi THÊM MỚI, không khi sửa.
   // ------------------------------------------
-  const isDuplicateCode = !editingProduct && !!formData.code && products.some(
-    (p) => p.code.toLowerCase() === formData.code.toLowerCase()
-  )
+  const [duplicateInfo, setDuplicateInfo] = useState<{ warehouseId: string; warehouseName: string } | null>(null)
+  const [checkingCode, setCheckingCode] = useState(false)
+  // Giữ mã mới nhất để bỏ kết quả cũ khi user gõ nhanh (tránh race)
+  const latestCodeRef = useRef('')
+
+  // Map warehouseId -> tên kho hiển thị (dùng bảng WAREHOUSES của trang này)
+  const warehouseNameById = (id: string) => WAREHOUSES.find(w => w.id === id)?.name || id
+
+  // Query DB kiểm tra mã đã tồn tại ở kho nào chưa
+  const checkDuplicateGlobally = async (code: string) => {
+    const normalized = normalizeProductCode(code)
+    if (!normalized) { setDuplicateInfo(null); return null }
+    latestCodeRef.current = normalized
+    setCheckingCode(true)
+    try {
+      const found = await findProductByCode(normalized)
+      // Chỉ nhận kết quả nếu user chưa gõ mã khác trong lúc chờ
+      if (latestCodeRef.current !== normalized) return duplicateInfo
+      const info = found ? { warehouseId: found.warehouseId, warehouseName: warehouseNameById(found.warehouseId) } : null
+      setDuplicateInfo(info)
+      return info
+    } finally {
+      setCheckingCode(false)
+    }
+  }
+
+  // Live-check khi user gõ mã hàng (debounce 400ms để đỡ spam DB)
+  useEffect(() => {
+    if (!isModalOpen || modalType !== 'import' || editingProduct) return
+    const code = formData.code
+    if (!normalizeProductCode(code)) { setDuplicateInfo(null); return }
+    const t = setTimeout(() => { checkDuplicateGlobally(code) }, 400)
+    return () => clearTimeout(t)
+  }, [formData.code, isModalOpen, modalType, editingProduct])
+
+  // ------------------------------------------
+  // Trạng thái trùng tên trong kho HIỆN TẠI
+  // (Tên hàng chỉ cần duy nhất trong cùng kho,
+  // khác kho được phép trùng tên)
+  // ------------------------------------------
+  const [duplicateName, setDuplicateName] = useState(false)
+  const [checkingName, setCheckingName] = useState(false)
+  // Giữ tên mới nhất để bỏ kết quả cũ khi user gõ nhanh (tránh race)
+  const latestNameRef = useRef('')
+
+  // Query DB kiểm tra tên đã tồn tại trong kho hiện tại chưa
+  // Khi sửa: bỏ qua chính sản phẩm đang sửa (giữ nguyên tên vẫn OK)
+  const checkDuplicateName = async (name: string) => {
+    const normalized = (name || '').trim()
+    if (!normalized) { setDuplicateName(false); return false }
+    const requestKey = `${selectedWarehouse}||${normalized.toLowerCase()}`
+    latestNameRef.current = requestKey
+    setCheckingName(true)
+    try {
+      const found = await findProductByNameInWarehouse(normalized, selectedWarehouse)
+      // Chỉ nhận kết quả nếu user chưa gõ tên/kho khác trong lúc chờ
+      if (latestNameRef.current !== requestKey) return duplicateName
+      const isDup = !!found && (!editingProduct || found.id !== editingProduct.id)
+      setDuplicateName(isDup)
+      return isDup
+    } finally {
+      setCheckingName(false)
+    }
+  }
+
+  // Live-check khi user gõ tên hàng (debounce 400ms để đỡ spam DB)
+  useEffect(() => {
+    if (!isModalOpen || modalType !== 'import') return
+    const name = formData.name
+    if (!(name || '').trim()) { setDuplicateName(false); return }
+    const t = setTimeout(() => { checkDuplicateName(name) }, 400)
+    return () => clearTimeout(t)
+  }, [formData.name, selectedWarehouse, isModalOpen, modalType, editingProduct])
 
   // Load products từ Supabase khi chọn kho
   const loadProducts = async (warehouseId: string) => {
@@ -77,13 +180,27 @@ export default function WarehousePage() {
   useEffect(() => {
     const userData = localStorage.getItem('user')
     if (!userData) { window.location.href = '/'; return }
-    setUser(JSON.parse(userData))
-    loadProducts('kho-vat-tu')
+    const parsed = JSON.parse(userData)
+    setUser(parsed)
+    // Kho mặc định = kho đầu tiên user được phép truy cập (theo thứ tự tab)
+    const firstAccessible = WAREHOUSES.find(w => canAccessWarehouse(parsed, w.id))?.id || ''
+    setSelectedWarehouse(firstAccessible)
+    if (firstAccessible) loadProducts(firstAccessible)
   }, [])
 
-  // Reload khi đổi kho
+  // Fallback: nếu kho đang chọn không còn được phép (đổi quyền giữa phiên),
+  // chuyển về kho đầu tiên được phép
   useEffect(() => {
-    if (user) loadProducts(selectedWarehouse)
+    if (!user) return
+    if (!canAccessWarehouse(user, selectedWarehouse)) {
+      const firstAccessible = WAREHOUSES.find(w => canAccessWarehouse(user, w.id))?.id || ''
+      setSelectedWarehouse(firstAccessible)
+    }
+  }, [user])
+
+  // Reload khi đổi kho (bỏ qua khi chưa có kho nào được phép)
+  useEffect(() => {
+    if (user && selectedWarehouse) loadProducts(selectedWarehouse)
   }, [selectedWarehouse])
 
   const filteredItems = products.filter(
@@ -93,6 +210,10 @@ export default function WarehousePage() {
   )
 
   const currentWarehouse = WAREHOUSES.find(w => w.id === selectedWarehouse)
+  // Chỉ hiện tab của các kho user được phép truy cập (admin = tất cả)
+  const visibleWarehouses = user
+    ? WAREHOUSES.filter(w => canAccessWarehouse(user, w.id))
+    : WAREHOUSES
 
   // ------------------------------------------
   // Mở modal Nhập liệu mới
@@ -100,7 +221,10 @@ export default function WarehousePage() {
   const handleImport = () => {
     setEditingProduct(null)
     setModalType('import')
-    setFormData({ code: '', name: '', unit: '', quantity: '', priceIn: '', priceOut: '', weight: '', weightUnit: 'kg', location: '', locationImage: '', productImage: '', importDate: new Date().toISOString().split('T')[0] })
+    setDuplicateInfo(null)
+    setDuplicateName(false)
+    setFormErrors({})
+    setFormData({ code: '', name: '', unit: '', quantity: '', weight: '', weightUnit: 'kg', location: '', locationImage: '', productImage: '', importDate: new Date().toISOString().split('T')[0] })
     setProductImageFile(null)
     setLocationImageFile(null)
     setIsModalOpen(true)
@@ -114,7 +238,9 @@ export default function WarehousePage() {
     setExportCodeInput('')
     setFoundProduct(null)
     setExportQuantity(0)
-    setExportPrice(0)
+    setExportReason('')
+    setExportQuantityError('')
+    setExportReasonError('')
     setIsModalOpen(true)
   }
 
@@ -137,12 +263,14 @@ export default function WarehousePage() {
     if (product) {
       setFoundProduct(product)
       setExportQuantity(0)
-      setExportPrice(product.priceOut)
     } else {
       setFoundProduct(null)
       setExportQuantity(0)
-      setExportPrice(0)
     }
+    // Đổi mã hàng = reset lý do + lỗi đỏ (tránh giữ lỗi của SP cũ)
+    setExportReason('')
+    setExportQuantityError('')
+    setExportReasonError('')
   }
 
   // Tìm sản phẩm khi nhập mã để nhập kho
@@ -162,11 +290,14 @@ export default function WarehousePage() {
   // Xác nhận xuất kho
   const handleConfirmExport = async () => {
     if (!foundProduct) { alert('Không tìm thấy sản phẩm!'); return }
-    if (exportQuantity <= 0) { alert('Số lượng xuất phải lớn hơn 0!'); return }
+    // Số lượng xuất: bắt buộc, > 0, không vượt tồn (lỗi đỏ inline, không alert)
+    if (!exportQuantity || exportQuantity <= 0) { setExportQuantityError('Vui lòng nhập số lượng xuất lớn hơn 0!'); return }
     if (exportQuantity > foundProduct.quantity) {
-      alert(`Số lượng tồn kho không đủ! Hiện có: ${foundProduct.quantity} ${foundProduct.unit}`)
+      setExportQuantityError(`Số lượng tồn kho không đủ! Hiện có: ${foundProduct.quantity} ${foundProduct.unit}`)
       return
     }
+    // Lý do xuất kho: bắt buộc (trống hoặc chỉ trắng = lỗi đỏ inline)
+    if (!exportReason.trim()) { setExportReasonError('Vui lòng nhập lý do xuất kho!'); return }
     setIsSaving(true)
     await updateProduct(foundProduct.id, { quantity: foundProduct.quantity - exportQuantity })
     await addHistoryEntry({
@@ -178,7 +309,7 @@ export default function WarehousePage() {
       userName: user?.name || user?.username || '',
       action: 'Xuất kho',
       quantity: exportQuantity,
-      details: `Xuất ${exportQuantity} ${foundProduct.unit}, giá ${exportPrice.toLocaleString('vi-VN')}đ`,
+      details: `Xuất ${exportQuantity} ${foundProduct.unit} — Lý do: ${exportReason.trim()}`,
     })
     alert(`Đã xuất ${exportQuantity} ${foundProduct.unit} ${foundProduct.name}`)
     setIsModalOpen(false)
@@ -214,13 +345,13 @@ export default function WarehousePage() {
   const handleEdit = (product: Product) => {
     setEditingProduct(product)
     setModalType('import')
+    setDuplicateName(false)
+    setFormErrors({})
     setFormData({
       code: product.code,
       name: product.name,
       unit: product.unit,
       quantity: product.quantity,
-      priceIn: product.priceIn,
-      priceOut: product.priceOut,
       weight: product.weight,
       weightUnit: product.weightUnit || 'kg',
       location: product.location,
@@ -243,12 +374,26 @@ export default function WarehousePage() {
 
   // Lưu sản phẩm (thêm mới hoặc cập nhật)
   const handleSave = async () => {
-    if (!formData.code || !formData.name || !formData.unit) {
-      alert('Vui lòng điền đầy đủ thông tin bắt buộc!')
+    // Kiểm tra 8 trường bắt buộc -> hiện cảnh báo đỏ từng ô, chặn lưu
+    const errors = validateForm()
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors)
       return
     }
-    if (isDuplicateCode) {
-      alert('Mã hàng đã tồn tại trong kho này! Vui lòng dùng mã khác.')
+    setFormErrors({})
+    // Chặn trùng mã trên TOÀN hệ thống (chỉ khi thêm mới;
+    // khi sửa thì ô mã bị khóa nên bỏ qua, tránh tự chặn chính mình)
+    if (!editingProduct) {
+      const dup = await checkDuplicateGlobally(formData.code)
+      if (dup) {
+        alert('Mã hàng này đã tồn tại. Vui lòng kiểm tra lại')
+        return
+      }
+    }
+    // Chặn trùng tên trong cùng kho (thêm mới, hoặc sửa đổi sang tên SP khác)
+    const nameDup = await checkDuplicateName(formData.name)
+    if (nameDup) {
+      alert('Tên hàng này đã tồn tại. Vui lòng kiểm tra lại!')
       return
     }
 
@@ -293,7 +438,7 @@ export default function WarehousePage() {
         userName: user?.name || user?.username || '',
         action: 'Nhập liệu',
         quantity: Number(formData.quantity) || 0,
-        details: `Nhập ${formData.quantity} ${formData.unit}, giá ${Number(formData.priceIn).toLocaleString('vi-VN')}đ`,
+        details: `Nhập ${formData.quantity} ${formData.unit}`,
       })
     }
     setIsSaving(false)
@@ -327,7 +472,7 @@ export default function WarehousePage() {
     return <div className="flex items-center justify-center h-screen">Loading...</div>
   }
 
-  const canImport = user?.isAdmin || (Array.isArray(user?.chucNang) ? user.chucNang : []).includes('nhap-kho')
+  const canImport = user?.isAdmin || (Array.isArray(user?.chucNang) ? user.chucNang : []).includes('nhap-lieu')
   const canExport = user?.isAdmin || (Array.isArray(user?.chucNang) ? user.chucNang : []).includes('xuat-kho')
 
   return (
@@ -340,9 +485,9 @@ export default function WarehousePage() {
             <h1 className="text-3xl font-bold text-gray-800">Quản Lý Kho</h1>
           </div>
 
-          {/* Warehouse Tabs */}
+          {/* Warehouse Tabs (chỉ kho được phép) */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            {WAREHOUSES.map((warehouse) => {
+            {visibleWarehouses.map((warehouse) => {
               const Icon = warehouse.icon
               const isSelected = selectedWarehouse === warehouse.id
               const colorClasses = {
@@ -369,7 +514,15 @@ export default function WarehousePage() {
             })}
           </div>
 
-          {/* Product Table */}
+          {/* Product Table (hoặc thông báo khi không có quyền kho nào) */}
+          {visibleWarehouses.length === 0 ? (
+            <Card className="border-l-4 border-l-red-500">
+              <CardContent className="p-8 text-center">
+                <Warehouse className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                <p className="text-gray-600 font-medium">Bạn không có quyền truy cập kho nào. Vui lòng liên hệ quản trị viên.</p>
+              </CardContent>
+            </Card>
+          ) : (
           <Card className={`border-l-4 ${
               currentWarehouse?.color === 'blue' ? 'border-l-blue-600' :
               currentWarehouse?.color === 'orange' ? 'border-l-orange-500' :
@@ -428,8 +581,6 @@ export default function WarehousePage() {
                       <th className="text-left py-3 px-4 font-semibold text-gray-700">Tên Hàng</th>
                       <th className="text-left py-3 px-4 font-semibold text-gray-700">ĐVT</th>
                       <th className="text-right py-3 px-4 font-semibold text-gray-700">Số Lượng</th>
-                      <th className="text-right py-3 px-4 font-semibold text-gray-700">Giá Nhập</th>
-                      <th className="text-right py-3 px-4 font-semibold text-gray-700">Giá Xuất</th>
                       <th className="text-right py-3 px-4 font-semibold text-gray-700">Khối Lượng</th>
                       <th className="text-left py-3 px-4 font-semibold text-gray-700">Vị Trí</th>
                     </tr>
@@ -457,12 +608,6 @@ export default function WarehousePage() {
                             {item.quantity.toLocaleString()}
                           </td>
                           <td className="py-3 px-4 text-right text-gray-600">
-                            {item.priceIn.toLocaleString('vi-VN')} đ
-                          </td>
-                          <td className="py-3 px-4 text-right text-green-600 font-medium">
-                            {item.priceOut.toLocaleString('vi-VN')} đ
-                          </td>
-                          <td className="py-3 px-4 text-right text-gray-600">
                             {item.weight} {item.weightUnit || 'kg'}
                           </td>
                           <td className="py-3 px-4">
@@ -481,6 +626,7 @@ export default function WarehousePage() {
               </div>
             </CardContent>
           </Card>
+          )}
 
           {/* ============================================================ */}
           {/* MODAL - Nhập Liệu Mới / Sửa Sản Phẩm                          */}
@@ -492,23 +638,29 @@ export default function WarehousePage() {
                   <h2 className="text-xl font-bold text-gray-800">
                     {editingProduct ? 'Sửa Sản Phẩm' : 'Nhập Liệu'}
                   </h2>
-                  <button onClick={() => setIsModalOpen(false)} className="p-1 hover:bg-gray-100 rounded">
+                  <button onClick={() => { setIsModalOpen(false); setFormErrors({}) }} className="p-1 hover:bg-gray-100 rounded">
                     <X className="w-5 h-5 text-gray-500" />
                   </button>
                 </div>
 
                 <div className="space-y-4">
-                  {/* Mã hàng - có cảnh báo trùng */}
+                  {/* Mã hàng - có cảnh báo trùng + cảnh báo đỏ thiếu bắt buộc */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Mã hàng *</label>
                     <Input
                       value={formData.code}
-                      onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
-                      className={`border-2 ${isDuplicateCode ? 'border-red-500 bg-red-50 focus:ring-red-400' : ''}`}
+                      onChange={(e) => { setFormData({ ...formData, code: e.target.value.toUpperCase() }); clearFieldError('code') }}
+                      className={`border-2 ${duplicateInfo || formErrors.code ? 'border-red-500 bg-red-50 focus:ring-red-400' : ''}`}
                       disabled={!!editingProduct}
                     />
-                    {isDuplicateCode && (
-                      <p className="text-red-600 text-xs mt-1 font-medium">⚠️ Mã hàng đã tồn tại trong kho này! Vui lòng sử dụng mã khác.</p>
+                    {formErrors.code && (
+                      <p className="text-red-600 text-xs mt-1 font-medium">⚠️ {formErrors.code}</p>
+                    )}
+                    {checkingCode && !duplicateInfo && (
+                      <p className="text-gray-500 text-xs mt-1">Đang kiểm tra mã hàng...</p>
+                    )}
+                    {duplicateInfo && (
+                      <p className="text-red-600 text-xs mt-1 font-medium">⚠️ Mã hàng này đã tồn tại (tại {duplicateInfo.warehouseName}). Vui lòng kiểm tra lại</p>
                     )}
                   </div>
 
@@ -516,93 +668,98 @@ export default function WarehousePage() {
                     <label className="block text-sm font-medium text-gray-700 mb-1">Tên hàng *</label>
                     <Input
                       value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      className="border-2"
+                      onChange={(e) => { setFormData({ ...formData, name: e.target.value }); clearFieldError('name') }}
+                      className={`border-2 ${duplicateName || formErrors.name ? 'border-red-500 bg-red-50 focus:ring-red-400' : ''}`}
                     />
+                    {formErrors.name && (
+                      <p className="text-red-600 text-xs mt-1 font-medium">⚠️ {formErrors.name}</p>
+                    )}
+                    {checkingName && !duplicateName && (
+                      <p className="text-gray-500 text-xs mt-1">Đang kiểm tra tên hàng...</p>
+                    )}
+                    {duplicateName && (
+                      <p className="text-red-600 text-xs mt-1 font-medium">⚠️ Tên hàng này đã tồn tại. Vui lòng kiểm tra lại!</p>
+                    )}
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Đơn vị tính *</label>
                     <Input
                       value={formData.unit}
-                      onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
-                      className="border-2"
+                      onChange={(e) => { setFormData({ ...formData, unit: e.target.value }); clearFieldError('unit') }}
+                      className={`border-2 ${formErrors.unit ? 'border-red-500 bg-red-50 focus:ring-red-400' : ''}`}
                     />
+                    {formErrors.unit && (
+                      <p className="text-red-600 text-xs mt-1 font-medium">⚠️ {formErrors.unit}</p>
+                    )}
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Số lượng</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Số lượng *</label>
                     <Input
                       type="text"
                       inputMode="numeric"
                       value={formData.quantity || ''}
-                      onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ''); setFormData({ ...formData, quantity: v ? parseInt(v) : '' as any }) }}
-                      className="border-2"
+                      onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ''); setFormData({ ...formData, quantity: v ? parseInt(v) : '' as any }); clearFieldError('quantity') }}
+                      className={`border-2 ${formErrors.quantity ? 'border-red-500 bg-red-50 focus:ring-red-400' : ''}`}
                     />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Giá nhập (VNĐ)</label>
-                    <Input
-                      type="text"
-                      inputMode="numeric"
-                      value={formData.priceIn ? Number(formData.priceIn).toLocaleString('vi-VN') : ''}
-                      onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ''); setFormData({ ...formData, priceIn: v ? parseInt(v) : '' as any }) }}
-                      className="border-2"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Giá xuất (VNĐ)</label>
-                    <Input
-                      type="text"
-                      inputMode="numeric"
-                      value={formData.priceOut ? Number(formData.priceOut).toLocaleString('vi-VN') : ''}
-                      onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ''); setFormData({ ...formData, priceOut: v ? parseInt(v) : '' as any }) }}
-                      className="border-2"
-                    />
+                    {formErrors.quantity && (
+                      <p className="text-red-600 text-xs mt-1 font-medium">⚠️ {formErrors.quantity}</p>
+                    )}
                   </div>
 
                   {/* Khối lượng + Đơn vị - 2 ô cạnh nhau */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Khối lượng</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Khối lượng *</label>
                     <div className="flex gap-2">
                       <Input
                         type="text"
                         inputMode="decimal"
                         value={formData.weight || ''}
-                        onChange={(e) => { const v = e.target.value.replace(/[^0-9.]/g, ''); setFormData({ ...formData, weight: v ? parseFloat(v) : '' as any }) }}
-                        className="border-2 flex-1"
+                        onChange={(e) => { const v = e.target.value.replace(/[^0-9.]/g, ''); setFormData({ ...formData, weight: v ? parseFloat(v) : '' as any }); clearFieldError('weight') }}
+                        className={`border-2 flex-1 ${formErrors.weight ? 'border-red-500 bg-red-50 focus:ring-red-400' : ''}`}
                         placeholder="Nhập số lượng"
                       />
                       <Input
                         type="text"
                         value={formData.weightUnit}
-                        onChange={(e) => setFormData({ ...formData, weightUnit: e.target.value })}
-                        className="border-2 w-28"
+                        onChange={(e) => { setFormData({ ...formData, weightUnit: e.target.value }); clearFieldError('weightUnit') }}
+                        className={`border-2 w-28 ${formErrors.weightUnit ? 'border-red-500 bg-red-50 focus:ring-red-400' : ''}`}
                         placeholder="Đơn vị"
                       />
                     </div>
+                    {formErrors.weight && (
+                      <p className="text-red-600 text-xs mt-1 font-medium">⚠️ {formErrors.weight}</p>
+                    )}
+                    {formErrors.weightUnit && (
+                      <p className="text-red-600 text-xs mt-1 font-medium">⚠️ {formErrors.weightUnit}</p>
+                    )}
                     <p className="text-xs text-gray-400 mt-1">VD: kg, g, lít, ml, chai, lon, bao...</p>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Vị trí</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Vị trí *</label>
                     <Input
                       value={formData.location}
-                      onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                      className="border-2"
+                      onChange={(e) => { setFormData({ ...formData, location: e.target.value }); clearFieldError('location') }}
+                      className={`border-2 ${formErrors.location ? 'border-red-500 bg-red-50 focus:ring-red-400' : ''}`}
                     />
+                    {formErrors.location && (
+                      <p className="text-red-600 text-xs mt-1 font-medium">⚠️ {formErrors.location}</p>
+                    )}
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Ngày nhập liệu</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Ngày nhập liệu *</label>
                     <Input
                       type="date"
                       value={formData.importDate}
-                      onChange={(e) => setFormData({ ...formData, importDate: e.target.value })}
-                      className="border-2"
+                      onChange={(e) => { setFormData({ ...formData, importDate: e.target.value }); clearFieldError('importDate') }}
+                      className={`border-2 ${formErrors.importDate ? 'border-red-500 bg-red-50 focus:ring-red-400' : ''}`}
                     />
+                    {formErrors.importDate && (
+                      <p className="text-red-600 text-xs mt-1 font-medium">⚠️ {formErrors.importDate}</p>
+                    )}
                   </div>
 
                   {/* Ảnh sản phẩm */}
@@ -656,13 +813,13 @@ export default function WarehousePage() {
                   </div>
 
                   <div className="flex gap-3 mt-6">
-                    <Button variant="outline" onClick={() => setIsModalOpen(false)} className="flex-1">
+                    <Button variant="outline" onClick={() => { setIsModalOpen(false); setFormErrors({}) }} className="flex-1">
                       Hủy
                     </Button>
                     <Button
                       onClick={handleSave}
                       className="flex-1 bg-green-600 hover:bg-green-700"
-                      disabled={isSaving || isDuplicateCode}
+                      disabled={isSaving || checkingCode || !!duplicateInfo || checkingName || duplicateName}
                     >
                       <Save className="w-4 h-4 mr-2" />
                       {isSaving ? 'Đang lưu...' : (editingProduct ? 'Cập Nhật' : 'Nhập Liệu')}
@@ -681,7 +838,7 @@ export default function WarehousePage() {
               <div className="bg-white rounded-2xl p-6 w-full max-w-5xl shadow-2xl max-h-[90vh] overflow-y-auto">
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-xl font-bold text-gray-800">Xuất Kho</h2>
-                  <button onClick={() => setIsModalOpen(false)} className="p-1 hover:bg-gray-100 rounded">
+                  <button onClick={() => { setIsModalOpen(false); setExportQuantityError(''); setExportReasonError('') }} className="p-1 hover:bg-gray-100 rounded">
                     <X className="w-5 h-5 text-gray-500" />
                   </button>
                 </div>
@@ -717,8 +874,6 @@ export default function WarehousePage() {
                               ['Tên hàng', foundProduct.name],
                               ['Đơn vị tính', foundProduct.unit],
                               ['Tồn kho', `${foundProduct.quantity.toLocaleString()} ${foundProduct.unit}`],
-                              ['Giá nhập', `${foundProduct.priceIn.toLocaleString('vi-VN')} đ`],
-                              ['Giá xuất', `${foundProduct.priceOut.toLocaleString('vi-VN')} đ`],
                               ['Khối lượng', `${foundProduct.weight} ${foundProduct.weightUnit || 'kg'}`],
                               ['Vị trí', foundProduct.location],
                             ].map(([l, v]) => (
@@ -746,34 +901,33 @@ export default function WarehousePage() {
                                 type="text"
                                 inputMode="numeric"
                                 value={exportQuantity || ''}
-                                onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ''); setExportQuantity(v ? parseInt(v) : 0) }}
-                                className="border-2 text-lg"
+                                onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ''); setExportQuantity(v ? parseInt(v) : 0); if (exportQuantityError) setExportQuantityError('') }}
+                                className={`border-2 text-lg ${exportQuantityError ? 'border-red-500 bg-red-50 focus:ring-red-400' : ''}`}
                               />
+                              {exportQuantityError && (
+                                <p className="text-red-600 text-xs mt-1 font-medium">⚠️ {exportQuantityError}</p>
+                              )}
                             </div>
                             <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">Giá xuất (VNĐ)</label>
-                              <Input
-                                type="text"
-                                inputMode="numeric"
-                                value={exportPrice ? exportPrice.toLocaleString('vi-VN') : ''}
-                                onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ''); setExportPrice(v ? parseInt(v) : 0) }}
-                                className="border-2 text-lg"
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Lý do *
+                              </label>
+                              <Textarea
+                                value={exportReason}
+                                onChange={(e) => { setExportReason(e.target.value); if (exportReasonError) setExportReasonError('') }}
+                                placeholder="Nhập lý do xuất kho..."
+                                className={`border-2 ${exportReasonError ? 'border-red-500 bg-red-50 focus:ring-red-400' : ''}`}
                               />
-                            </div>
-                            <div className="p-3 bg-orange-50 rounded-lg border border-orange-200">
-                              <div className="flex justify-between items-center">
-                                <span className="font-medium text-gray-700">Tổng giá trị:</span>
-                                <span className="text-xl font-bold text-orange-600">
-                                  {(exportQuantity * exportPrice).toLocaleString('vi-VN')} đ
-                                </span>
-                              </div>
+                              {exportReasonError && (
+                                <p className="text-red-600 text-xs mt-1 font-medium">⚠️ {exportReasonError}</p>
+                              )}
                             </div>
                           </div>
                         </div>
                       </div>
 
                       <div className="mt-4 flex gap-3">
-                        <Button variant="outline" onClick={() => setIsModalOpen(false)} className="flex-1">Hủy</Button>
+                        <Button variant="outline" onClick={() => { setIsModalOpen(false); setExportQuantityError(''); setExportReasonError('') }} className="flex-1">Hủy</Button>
                         <Button onClick={handleConfirmExport} className="flex-1 bg-orange-500 hover:bg-orange-600 text-white" disabled={isSaving}>
                           <LogOut className="w-4 h-4 mr-2" />
                           {isSaving ? 'Đang xử lý...' : 'Xác Nhận Xuất Kho'}

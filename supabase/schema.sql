@@ -103,6 +103,14 @@ CREATE POLICY "Allow all for anon" ON employees FOR ALL USING (true) WITH CHECK 
 -- DỮ LIỆU MẪU BAN ĐẦU
 -- ==========================================
 -- Tạo tài khoản Admin mặc định để đăng nhập lần đầu
+-- (bao gồm cả 4 quyền kho để admin luôn thấy đủ tab)
 INSERT INTO accounts (username, password, name, chuc_vu, chuc_nang, status, is_admin)
-VALUES ('admin', 'admin', 'Quản Trị Viên', 'Giám đốc', '{"them-tai-khoan","quan-ly-nhan-su","nhap-kho","xuat-kho","ton-kho"}', 'active', true)
+VALUES ('admin', 'admin', 'Quản Trị Viên', 'Giám đốc', '{"them-tai-khoan","quan-ly-nhan-su","nhap-lieu","xuat-kho","ton-kho","kho-vat-tu","kho-xay-dung","kho-phong-thi-nghiem","kho-thuong-mai"}', 'active', true)
 ON CONFLICT (username) DO NOTHING;
+
+-- ==========================================
+-- MIGRATION 1 LẦN: Đổi ID quyền kho cũ sang ID mới (khớp tab kho)
+-- Chạy 1 lần trong SQL Editor nếu DB đã có tài khoản dùng ID cũ
+-- ==========================================
+-- UPDATE accounts SET chuc_nang = array_replace(chuc_nang, 'kho-vat-tu-nha-may', 'kho-vat-tu');
+-- UPDATE accounts SET chuc_nang = array_replace(chuc_nang, 'kho-xay-dung-co-ban', 'kho-xay-dung');
