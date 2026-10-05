@@ -33,6 +33,15 @@ History page (`app/history/page.tsx`) shows `history_log` entries (newest first)
 - Refactor `app/history/preview-print-file.tsx`: accept `props { rows: RowData[] }` instead of internal mock `originalData`; remove demo-only `Tạo 1.000 dòng` / `Khôi phục mẫu` generator; keep zoom + `In phiếu (window.print())` + A4 `@page` CSS. Export `RowData` type.
 - No schema change, no change to `lib/constants.ts`; DB reads go through `lib/db.ts` (`getHistoryLog` + `getAllProducts` for unit lookup). Vietnamese UI labels unchanged.
 
+## Feature: Signature Grid Pinned to Bottom of Last Printed Page
+- Scope: CSS-only change in `app/history/preview-print-file.tsx`. The 5-signature grid (`.signature-footer`) appears exactly once, at the bottom of the last printed page — it is never repeated on every page.
+- Root cause: on screen, `.a4-page` is a flex column and `.content-body { flex-grow: 1 }` pushes the footer down; the `@media print` override switches to `display: block; min-height: auto`, which removes that push so the footer floats right after the table in the PDF.
+- Behavior:
+  - Short voucher (fits one page) -> signatures sit at the bottom of that page, both on screen and in print/PDF.
+  - Long voucher (multiple pages) -> signatures stay together as one unbroken block (`break-inside: avoid` kept) right after the table on the last page. True bottom-fill of the last fragment is not reachable with pure CSS fragmentation, so this is the closest correct behavior without repeating footers.
+- Side fix: the preview zoom wrapper's `transform: scale(...)` is reset in print (`transform: none !important`) so a non-100% zoom never shrinks content or adds blank pages to the PDF.
+- No data, mapping, route, or DB changes.
+
 ## Files
 - Modify: `app/history/page.tsx` (filter state, options memo, `<select>` UI, two-layer filter; plus print button + unit lookup + `handlePrintPhieu`).
 - Modify: `app/history/preview-print-file.tsx` (props-based rows, remove demo data generator).

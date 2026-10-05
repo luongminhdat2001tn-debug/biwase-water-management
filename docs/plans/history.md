@@ -62,3 +62,21 @@
 - [ ] Step 4: Replace the lone Excel `<Button>` in `CardHeader` with `<div className="flex gap-2">` containing orange `Xuất Phiếu Kho` (left, `onClick={handlePrintPhieu}`) + green `Xuất Excel` (right, unchanged handler). Keep `filteredHistory.length > 0` guard for the group. Vietnamese labels/comments.
 - [ ] Step 5: Self-review diff (no `supabase.from()` in pages, no TS error introduction); run `npm run build`. Expected: builds clean.
 - [ ] Step 6: Manual test: filter -> `Xuất Phiếu Kho` opens `/history/print` new tab with matching row count, TEST/ĐVT/details correct; direct visit to `/history/print` shows empty state; Excel still works.
+
+---
+
+### Task 3: Pin signature grid to bottom of last printed page in `preview-print-file.tsx`
+
+**Files:**
+- Modify: `app/history/preview-print-file.tsx` (print CSS only + zoom-wrapper class)
+- Reference: `docs/specs/history.md` (Feature: Signature Grid Pinned to Bottom of Last Printed Page)
+
+**Interfaces:**
+- Consumes: existing `.a4-page` / `.content-body` / `.signature-footer` classes; zoom wrapper `div` with inline `transform`.
+- Produces: no new exports, no prop changes; print/PDF layout change only.
+
+- [ ] Step 1: In `@media print`, replace `.a4-page { display: block !important; min-height: auto !important; ... }` with flex-column restoration: `display: flex !important; flex-direction: column !important; min-height: 257mm` (297mm A4 minus 2x10mm `@page` margins); keep `box-shadow: none`, `margin: 0`, `width: 100%`, `padding: 0` overrides.
+- [ ] Step 2: Give `.signature-footer` `margin-top: auto` in print (keep `break-inside: avoid`); confirm `.content-body { flex-grow: 1 }` rule is shared (not screen-only) so the spacer pushes the footer down.
+- [ ] Step 3: Add a class (e.g. `print-zoom-reset`) to the zoom wrapper `div` and a print rule `transform: none !important` so non-100% preview zoom never shrinks print output or adds blank pages.
+- [ ] Step 4: Self-review diff (CSS-only, no JSX logic change except the wrapper className); run `npm run build`. Expected: builds clean.
+- [ ] Step 5: Manual test: few rows -> signatures at page bottom on screen and in print preview; many rows -> footer kept whole on last page; zoom at 150% then print -> output identical to 100%.

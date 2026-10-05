@@ -472,7 +472,7 @@ export default function WarehousePage() {
     return <div className="flex items-center justify-center h-screen">Loading...</div>
   }
 
-  const canImport = user?.isAdmin || (Array.isArray(user?.chucNang) ? user.chucNang : []).includes('nhap-kho')
+  const canImport = user?.isAdmin || (Array.isArray(user?.chucNang) ? user.chucNang : []).includes('nhap-lieu')
   const canExport = user?.isAdmin || (Array.isArray(user?.chucNang) ? user.chucNang : []).includes('xuat-kho')
 
   return (

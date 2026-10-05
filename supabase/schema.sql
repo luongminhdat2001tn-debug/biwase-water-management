@@ -105,7 +105,7 @@ CREATE POLICY "Allow all for anon" ON employees FOR ALL USING (true) WITH CHECK 
 -- Tạo tài khoản Admin mặc định để đăng nhập lần đầu
 -- (bao gồm cả 4 quyền kho để admin luôn thấy đủ tab)
 INSERT INTO accounts (username, password, name, chuc_vu, chuc_nang, status, is_admin)
-VALUES ('admin', 'admin', 'Quản Trị Viên', 'Giám đốc', '{"them-tai-khoan","quan-ly-nhan-su","nhap-kho","xuat-kho","ton-kho","kho-vat-tu","kho-xay-dung","kho-phong-thi-nghiem","kho-thuong-mai"}', 'active', true)
+VALUES ('admin', 'admin', 'Quản Trị Viên', 'Giám đốc', '{"them-tai-khoan","quan-ly-nhan-su","nhap-lieu","xuat-kho","ton-kho","kho-vat-tu","kho-xay-dung","kho-phong-thi-nghiem","kho-thuong-mai"}', 'active', true)
 ON CONFLICT (username) DO NOTHING;
 
 -- ==========================================

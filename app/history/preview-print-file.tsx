@@ -87,11 +87,13 @@ const PreviewPrintFile: React.FC<{ rows: RowData[] }> = ({ rows }) => {
                         box-shadow: none !important;
                         margin: 0 !important;
                         width: 100% !important;
-                        min-height: auto !important;
+                        min-height: 260mm !important;
                         padding: 0 !important;
-                        display: block !important; 
+                        display: flex !important;
+                        flex-direction: column !important;
                     }
-                    .signature-footer { margin-top: 40px !important; }
+                    .print-zoom-reset { transform: none !important; }
+                    .signature-footer { margin-top: auto !important; padding-top: 40px; }
                     @page { size: A4 portrait; margin: 10mm 15mm; }
                 }
             `}</style>
@@ -126,7 +128,7 @@ const PreviewPrintFile: React.FC<{ rows: RowData[] }> = ({ rows }) => {
 
             {/* Document Container */}
             <div className="w-full flex justify-center overflow-x-auto py-6 px-2">
-                <div style={{ transform: `scale(${zoomLevel})`, transformOrigin: 'top center', transition: 'transform 0.2s' }}>
+                <div className="print-zoom-reset" style={{ transform: `scale(${zoomLevel})`, transformOrigin: 'top center', transition: 'transform 0.2s' }}>
                     <main className="a4-page">
 
                         <div className="content-body">

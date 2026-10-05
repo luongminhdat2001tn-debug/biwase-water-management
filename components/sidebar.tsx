@@ -34,7 +34,6 @@ const MENU_ITEMS = [
   { id: 'warehouse', label: 'Quản Lý Kho', icon: Package, href: '/warehouse' },
   { id: 'inventory', label: 'Tồn Kho', icon: Archive, href: '/inventory' },
   { id: 'history', label: 'Lịch Sử Kho', icon: History, href: '/history' },
-  { id: 'hr', label: 'Quản Lý Nhân Sự', icon: Users, href: '/hr' },
   { id: 'account', label: 'Tài Khoản', icon: UserCog, href: '/account' },
 ]
 
