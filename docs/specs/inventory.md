@@ -20,6 +20,23 @@ Shared shell via `components/sidebar.tsx`. All Supabase access via `lib/db.ts`.
 - Gate note: edit/delete on the warehouse page use `canImport` (`nhap-lieu` or admin).
   A user with only `ton-kho` no longer edits products anywhere (accepted in design review).
 
+## Feature: "Có Hình Ảnh" Column (always visible)
+- New read-only column `Có Hình Ảnh` in the product table of `app/inventory/page.tsx`,
+  placed **immediately before `Thông tin`**.
+- Cell: `<Checkbox checked={!!item.productImage} disabled />`
+  (`components/ui/checkbox.tsx`). Ticked when `productImage` is a non-empty string
+  (from `product_image_url` via `mapProductFromDB`); unticked otherwise. Display only —
+  no click handler, no DB write.
+- Not permission-gated (shown to every user who can see the table); the checkbox is
+  `disabled`, so no permission is required to render it.
+- Table becomes `STT, Mã Hàng, Tên Hàng, Số Lượng, Có Hình Ảnh, Thông tin, Xóa`
+  (7 columns with `Xóa`; 6 without).
+- Empty-row `colSpan` changes from `hasEditPermission ? 6 : 5` to
+  `hasEditPermission ? 7 : 6` (both numbers must move, otherwise the empty state
+  misaligns).
+- Files: `app/inventory/page.tsx` (+ this spec). No changes to `lib/db.ts`,
+  `lib/constants.ts`, schema, history page, or the `Xem` detail modal.
+
 ## Feature: Delete Confirm Shows Product Name
 - Column `Xóa` stays on this page (unchanged permission gate `ton-kho | them-tai-khoan | admin`).
 - Confirm message now injects the product name (same template as warehouse):
@@ -39,3 +56,23 @@ Shared shell via `components/sidebar.tsx`. All Supabase access via `lib/db.ts`.
 6. Warehouse page (`nhap-lieu` user) shows `Thao tác` + `Xóa`; editing there works
    per `docs/specs/warehouse.md` checklist 11-19.
 7. `npm run build` passes.
+
+## Feature: Weight + Unit Display in Detail Modal (` - ` separator)
+- In `app/inventory/page.tsx` `Thông Tin Sản Phẩm` modal, the `Khối lượng` field
+  renders `{selectedProduct.weight} - {selectedProduct.weightUnit}` (line ~200).
+- Examples: `5 - kg`, and `0 - Chưa rõ` for a product saved from the warehouse form
+  with the `Chưa rõ` checkbox ticked (`weight 0` + `weightUnit 'Chưa rõ'`).
+- No fallback added here: the warehouse form always stores a non-empty unit
+  (`kg` or `Chưa rõ`); `lib/db.ts` already falls back to `kg` at the mapper level.
+- Files: only `app/inventory/page.tsx` (+ this spec). No `lib/db.ts` change.
+
+## Manual Test Checklist ("Có Hình Ảnh" column)
+8. Tồn Kho table shows `Có Hình Ảnh` between `Số Lượng` and `Thông tin`; a product with
+   `productImage` shows a ticked (disabled) checkbox, one without shows unticked.
+9. Column shows for both a `ton-kho` user and a read-only user; the checkbox cannot be
+   clicked (disabled).
+10. Warehouse with zero products: empty-state message spans the full table width
+   (no misaligned row) for both permission cases.
+11. `Xem` on a product -> `Khối lượng` reads `5 - kg` (dash + spaces). On a product
+    saved with the warehouse `Chưa rõ` checkbox -> `0 - Chưa rõ`.
+12. `npm run build` passes.

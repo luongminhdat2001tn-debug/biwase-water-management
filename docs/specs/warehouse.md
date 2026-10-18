@@ -118,6 +118,61 @@ Shared shell via `components/sidebar.tsx`. All Supabase access via `lib/db.ts`.
 - Files: `app/warehouse/page.tsx` (+ this spec). No changes to `lib/db.ts`,
   `lib/constants.ts`, `supabase/schema.sql`, sidebar, or history page.
 
+## Feature: "Có Hình Ảnh" Column (always visible)
+- New read-only column `Có Hình Ảnh` in the product table of `app/warehouse/page.tsx`,
+  placed **immediately before `Thao tác`** (i.e. after `Vị Trí`).
+- Cell: `<Checkbox checked={!!item.productImage} disabled />`
+  (`components/ui/checkbox.tsx`). Ticked when `productImage` is a non-empty string;
+  unticked otherwise. Display only — no click handler, no DB write.
+- NOT permission-gated: visible for every user who sees the table (unlike `Thao tác` /
+  `Xóa`, which stay behind `canImport`). The checkbox is `disabled`.
+- Column count 8 -> 9 (max, with `Thao tác` + `Xóa`). The hardcoded `colSpan={8}` on the
+  loading / empty rows (lines ~815, ~818) becomes dynamic:
+  `colSpan={canImport ? 9 : 7}` — required now that a non-gated column was added.
+- Files: `app/warehouse/page.tsx` (+ this spec). No changes to `lib/db.ts`,
+  `lib/constants.ts`, schema, inventory page, or history page.
+
+## Feature: "Chưa rõ" Weight Checkbox (both forms)
+- Applies to BOTH forms in `app/warehouse/page.tsx`: the `Nhập Liệu` modal
+  (`formData`) and the `Sửa Sản Phẩm Tồn Kho` modal (`editFormData`).
+- UI: next to the `Khối lượng *` label, add a `<Checkbox>` + label `Chưa rõ`
+  (same row as the label, right-aligned).
+- State: one boolean per form — `weightUnknown` (import) and `editWeightUnknown`
+  (edit). Both reset to `false` on modal open (`handleImport`, `handleEdit`).
+- Tick behavior: `weight = 0`, `weightUnit = 'Chưa rõ'`, both the weight `<Input>` and
+  the weightUnit `<Input>` get `disabled` (plus a muted class
+  `bg-gray-100 cursor-not-allowed`, matching the disabled `Số lượng` field in the
+  edit modal), and both `formErrors.weight` / `formErrors.weightUnit`
+  (`editFormErrors.*`) are cleared.
+- Untick behavior: inputs re-enabled; `weight = ''` (import form) / `''` cast for
+  the edit form, `weightUnit = 'kg'`; the `> 0` rule applies again.
+- Validation: `validateForm()` skips the `weight` and `weightUnit` checks when
+  `weightUnknown` is true; `validateEditForm()` does the same for
+  `editWeightUnknown`. All other mandatory fields unchanged.
+- Save: unchanged code paths — `weight: 0` + `weightUnit: 'Chưa rõ'` are persisted via
+  the existing `createProduct` / `updateProduct` mappers. No `lib/db.ts`,
+  `lib/constants.ts`, `supabase/schema.sql`, history-log-message, or validation change
+  (`lib/db.ts`'s `product.weightUnit || 'kg'` fallback is unaffected — `'Chưa rõ'` is truthy).
+- Edit modal open: if the loaded product has `weight <= 0`, the checkbox is
+  auto-ticked and `editFormData` is normalized to `weight: 0`, `weightUnit: 'Chưa rõ'`
+  (so a legacy `0 kg` row reads back as "chưa rõ" and is re-saved as `0 / Chưa rõ`).
+- Known ceiling (accepted): `weight 0` is the flag — a product whose unit is a real
+  unit but whose weight is genuinely 0 still reads back as "chưa rõ" on open.
+  Add a `weight_unknown` boolean column only if the two must be distinguished later.
+
+## Feature: Weight + Unit Display Format (` - ` separator)
+- All weight/unit renderings use `{weight} - {weightUnit}` (hyphen with spaces);
+  `'kg'` remains the fallback only where no unit is stored.
+- `app/warehouse/page.tsx` product table row: `{item.weight} {item.weightUnit || 'kg'}`
+  -> `{item.weight} - {item.weightUnit || 'kg'}`.
+- `app/warehouse/page.tsx` Xuất kho summary (`foundProduct` lines): same change.
+- `app/warehouse/page.tsx` edit-history diff string (line ~570) becomes
+  `Khối lượng: {old.weight} - {old.weightUnit || 'kg'} → {editFormData.weight} - {editFormData.weightUnit}`
+  (needed now that a unit can be the multi-word `Chưa rõ`).
+- Inventory detail modal lives in `docs/specs/inventory.md`.
+- Files: `app/warehouse/page.tsx` (+ this spec). No `lib/db.ts` change.
+- Files: only `app/warehouse/page.tsx` (+ this spec).
+
 ## Validation Rules
 - Empty = `''`, `null`, `undefined`, or whitespace-only for strings.
 - `quantity` / `weight`: empty string counts as missing; `0` is treated as missing
@@ -160,3 +215,32 @@ Shared shell via `components/sidebar.tsx`. All Supabase access via `lib/db.ts`.
 18. Repeat 11-17 on the Tồn Kho page for its `Xóa` column (name-injected message) and
     confirm `Thao tác`/edit modal are GONE from Tồn Kho.
 19. `npm run build` passes.
+
+## Manual Test Checklist ("Có Hình Ảnh" column)
+20. Warehouse table shows `Có Hình Ảnh` between `Vị Trí` and `Thao tác`; a product with
+    `productImage` shows a ticked (disabled) checkbox, one without shows unticked.
+21. `nhap-lieu`/admin user: column visible with `Thao tác` + `Xóa`; user without
+    `nhap-lieu`: column still visible, `Thao tác`/`Xóa` hidden, and the empty-state row
+    spans the full width (`canImport ? 9 : 7`).
+22. `npm run build` passes.
+
+## Manual Test Checklist ("Chưa rõ" weight checkbox)
+23. Nhập Liệu: tick `Chưa rõ` next to `Khối lượng *` -> weight shows `0`, unit shows
+    `kg`, both inputs greyed out and unfocusable; error messages (if any) disappear.
+24. Nhập Liệu: with `Chưa rõ` ticked, fill the other mandatory fields -> Save succeeds
+    (no `Vui lòng nhập khối lượng lớn hơn 0`); table row shows `0 kg`.
+25. Nhập Liệu: untick -> inputs become editable again, weight `0` cleared to empty;
+    Save with empty weight -> red `Vui lòng nhập khối lượng lớn hơn 0`, save blocked.
+26. Sửa Sản Phẩm Tồn Kho: open a product with a real weight (e.g. `5 kg`) -> checkbox
+    UNticked, fields enabled. Open a product saved earlier as `0 kg` -> checkbox
+    already ticked, both fields disabled showing `0` / `kg`.
+27. Sửa: tick the box on a product with weight `5` -> Save -> product becomes `0 kg`,
+    history row details contains `Khối lượng: 5kg → 0kg`.
+28. Closing and reopening either modal resets the checkbox to unticked (Nhập Liệu) /
+    derived from the product (Sửa).
+29. Tick `Chưa rõ` -> the unit input shows `Chưa rõ` (not `kg`); Save -> the product
+    row and Xuất kho summary show `0 - Chưa rõ`. Untick -> unit input back to `kg`.
+30. Warehouse table / Xuất kho summary show `5 - kg` for a normal product (dash, spaces).
+31. Edit a product with weight `5` -> tick `Chưa rõ` -> Save -> history detail reads
+    `Khối lượng: 5 - kg → 0 - Chưa rõ`; the edit modal reopens already ticked.
+32. `npm run build` passes.

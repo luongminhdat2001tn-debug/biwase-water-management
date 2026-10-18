@@ -52,6 +52,32 @@ Steps:
 
 Scope guard: no quantity validation (disabled field), no image validation, no new deps.
 
+## Plan: "Có Hình Ảnh" Column (English)
+
+Goal: spec `docs/specs/inventory.md` section "Có Hình Ảnh" Column — read-only tick column before `Thông tin`.
+Only `app/inventory/page.tsx` changes. No `lib/db.ts` / schema changes.
+
+### Task 1: Add the column
+
+**Files:** Modify `app/inventory/page.tsx`
+
+- [ ] **Step 1:** Add `Checkbox` to the imports: `import { Checkbox } from '@/components/ui/checkbox'` (after line 7, near the other `components/ui` imports).
+- [ ] **Step 2:** In `<thead>` add, after the `Số Lượng` `<th>` (line 132) and before the `Thông tin` `<th>` (line 133):
+      `<th className="text-center py-3 px-4 font-semibold text-gray-700">Có Hình Ảnh</th>`
+- [ ] **Step 3:** In the row `<td>` list, after the `Số Lượng` cell (line 146) and before the `Thông tin` cell (line 147):
+      `<td className="py-3 px-4 text-center"><Checkbox checked={!!item.productImage} disabled /></td>`
+- [ ] **Step 4:** Empty-row colSpan (line 139): `hasEditPermission ? 6 : 5` → `hasEditPermission ? 7 : 6`.
+- [ ] **Step 5:** Run `npm run build`; self-review the diff (no other `colSpan` / column-count references left).
+
+### Task 2: Verify
+
+- [ ] **Step 1:** `npm run build` clean.
+- [ ] **Step 2:** Manual checklist items 8-11 in `docs/specs/inventory.md`.
+
+### Scope Guard
+- No changes to `lib/db.ts`, `lib/constants.ts`, schema, sidebar, `Xem` detail modal, delete gate or history logging.
+- Column is not permission-gated; checkbox stays `disabled` (no click handler, no state).
+
 ## Plan: Remove Edit Column/Modal + Name-Injected Delete (English)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -115,3 +141,24 @@ Scope guard: no quantity validation (disabled field), no image validation, no ne
 ## Scope Guard
 - No changes to `lib/db.ts`, `lib/constants.ts`, schema, sidebar, or the Xem detail modal.
 - Delete gate (`canEditInventory`) and history logging on delete stay exactly as they are, message aside.
+
+## Plan: Weight + Unit Display in Detail Modal (English)
+
+Goal: spec `docs/specs/inventory.md` section "Weight + Unit Display in Detail Modal".
+Only `app/inventory/page.tsx` changes. No `lib/db.ts` / schema changes.
+
+### Task 1: ` - ` separator in the Xem modal
+
+**Files:** Modify `app/inventory/page.tsx` (line ~200)
+
+- [ ] **Step 1:** `Khối lượng` value: `{selectedProduct.weight} {selectedProduct.weightUnit}` → `{selectedProduct.weight} - {selectedProduct.weightUnit}` (` - ` with spaces).
+- [ ] **Step 2:** Run `npm run build`. Expected: clean.
+
+### Task 2: Verify
+
+- [ ] **Step 1:** `npm run build` clean.
+- [ ] **Step 2:** Manual checklist items 11-12 in `docs/specs/inventory.md`.
+
+### Scope Guard
+- No fallback added here — `lib/db.ts`'s `weightUnit: row.weight_unit || 'kg'` already guarantees a non-empty unit.
+- No changes to the table columns, delete gate, search, tabs, or history logging.

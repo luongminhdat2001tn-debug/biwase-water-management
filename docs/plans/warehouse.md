@@ -170,3 +170,101 @@ IDs + access rule in `docs/specs/account.md`.
 ## Scope Guard
 - No changes to `lib/db.ts`, `lib/constants.ts`, schema, sidebar, history page, or export/addmore modals.
 - No new dependencies. No quantity validation anywhere on edit (field disabled).
+
+## Plan: "Chưa rõ" Unit Value + ` - ` Display Format (English)
+
+Goal: spec `docs/specs/warehouse.md` sections ""Chưa rõ" Weight Checkbox" (updated
+`weightUnit` value) and "Weight + Unit Display Format". No `lib/db.ts` / schema change:
+`'Chưa rõ'` is truthy, so `weight_unit: product.weightUnit || 'kg'` stores it as-is.
+
+### Task 1: Tick stores unit `Chưa rõ`
+
+**Files:** Modify `app/warehouse/page.tsx`
+
+- [ ] **Step 1:** `handleToggleWeightUnknown` (~line 78): `weightUnit: 'kg'` → `weightUnit: checked ? 'Chưa rõ' : 'kg'`.
+- [ ] **Step 2:** `handleToggleEditWeightUnknown` (~line 229): same one-token change.
+- [ ] **Step 3:** `handleEdit` (~line 506): `weightUnit: unknown ? 'kg' : (product.weightUnit || 'kg')` → `weightUnit: unknown ? 'Chưa rõ' : (product.weightUnit || 'kg')`.
+
+### Task 2: ` - ` separator in all three renderings
+
+- [ ] **Step 1:** Table row (~line 879): `{item.weight} {item.weightUnit || 'kg'}` → `{item.weight} - {item.weightUnit || 'kg'}`.
+- [ ] **Step 2:** Xuất kho summary (~line 1242): `` `${foundProduct.weight} ${foundProduct.weightUnit || 'kg'}` `` → `` `${foundProduct.weight} - ${foundProduct.weightUnit || 'kg'}` ``.
+- [ ] **Step 3:** Edit-history diff (~line 570): `` `Khối lượng: ${old.weight}${old.weightUnit || 'kg'} → ${editFormData.weight}${editFormData.weightUnit}` `` → `` `Khối lượng: ${old.weight} - ${old.weightUnit || 'kg'} → ${editFormData.weight} - ${editFormData.weightUnit}` ``.
+
+### Task 3: Verify
+
+- [ ] **Step 1:** `npm run build` clean.
+- [ ] **Step 2:** Manual checklist items 29-32 in `docs/specs/warehouse.md`.
+
+### Scope Guard
+- Untick still resets the unit to `kg` and weight to empty (rule applies again).
+- No change to `validateForm` / `validateEditForm`, the checkbox disable logic, or `lib/*`.
+
+## Plan: "Chưa rõ" Weight Checkbox (English)
+
+Goal: spec `docs/specs/warehouse.md` section "Chưa rõ" Weight Checkbox — both forms in
+`app/warehouse/page.tsx`. No `lib/db.ts`, `lib/constants.ts`, schema, or history changes.
+
+Reference lines: import `formData` 42-53, `validateForm` 73-84 (weight checks 79-80),
+`handleImport` reset 339, import modal JSX 950-977 | `editFormData` 181-183,
+`validateEditForm` 206-216 (211-212), `handleEdit` 457-479, edit modal JSX 1090-1098.
+
+### Task 1: Nhập Liệu form
+
+**Files:** Modify `app/warehouse/page.tsx`
+
+- [ ] **Step 1:** Add state next to the `formErrors` block: `const [weightUnknown, setWeightUnknown] = useState(false)`.
+- [ ] **Step 2:** Add the toggle handler next to `clearFieldError`:
+      `const handleToggleWeightUnknown = (checked: boolean) => { setWeightUnknown(checked); setFormData({ ...formData, weight: checked ? 0 : '' as any, weightUnit: 'kg' }); setFormErrors((prev) => { if (!prev.weight && !prev.weightUnit) return prev; const next = { ...prev }; delete next.weight; delete next.weightUnit; return next }) }`
+      (Vietnamese comment: `// Tick "Chưa rõ" -> khối lượng 0 kg và khóa 2 ô nhập`).
+- [ ] **Step 3:** `validateForm()`: wrap lines 79-80 in `if (!weightUnknown) { ... }`.
+- [ ] **Step 4:** `handleImport()`: add `setWeightUnknown(false)` next to `setFormErrors({})`.
+- [ ] **Step 5:** Import modal JSX (950-977): replace the `Khối lượng *` label with a flex row
+      (label + `Chưa rõ` `<Checkbox checked={weightUnknown} onCheckedChange={(v) => handleToggleWeightUnknown(!!v)} />`);
+      add `disabled={weightUnknown}` and `${weightUnknown ? 'bg-gray-100 cursor-not-allowed' : ''}` to BOTH inputs.
+
+### Task 2: Sửa Sản Phẩm Tồn Kho form
+
+- [ ] **Step 1:** Add state next to `editFormErrors`: `const [editWeightUnknown, setEditWeightUnknown] = useState(false)`.
+- [ ] **Step 2:** Add `handleToggleEditWeightUnknown` mirroring Task 1 Step 2 (writes `editFormData`, clears `editFormErrors.weight` / `.weightUnit`).
+- [ ] **Step 3:** `validateEditForm()`: wrap lines 211-212 in `if (!editWeightUnknown) { ... }`.
+- [ ] **Step 4:** `handleEdit()`: derive + normalize — `const unknown = !(Number(product.weight) > 0)`; `setEditWeightUnknown(unknown)`; `weight: unknown ? 0 : product.weight`, `weightUnit: unknown ? 'kg' : (product.weightUnit || 'kg')`.
+- [ ] **Step 5:** Edit modal JSX (1090-1098): same label row + BOTH inputs get `disabled={editWeightUnknown}` and the muted class next to the existing error class.
+
+### Task 3: Verify
+
+- [ ] **Step 1:** `npm run build` clean (build ignores TS — re-read the diff for type slips).
+- [ ] **Step 2:** Manual checklist items 23-29 in `docs/specs/warehouse.md`.
+
+### Scope Guard
+- No schema / mapper / type change: `0 kg` is stored as a real `0`; "unknown" is a UI-only state (accepted ceiling, see spec).
+- No changes to export/addmore modals, the products table, history page, or `lib/*`.
+- New `Checkbox` usage reuses the import already added for the "Có Hình Ảnh" column.
+
+## Plan: "Có Hình Ảnh" Column (English)
+
+Goal: spec `docs/specs/warehouse.md` section "Có Hình Ảnh" Column — read-only tick column before `Thao tác`.
+Current table lines: `<thead>` 802-811, rows 824-856, loading/empty `colSpan={8}` at 815 and 818.
+Only `app/warehouse/page.tsx` changes. No `lib/db.ts` / schema changes.
+
+### Task 1: Add the column
+
+**Files:** Modify `app/warehouse/page.tsx`
+
+- [ ] **Step 1:** Add `import { Checkbox } from '@/components/ui/checkbox'` next to the other `components/ui` imports.
+- [ ] **Step 2:** In `<thead>` after the `Vị Trí` `<th>` (line 808) and before the `Thao tác` `<th>` (line 809):
+      `<th className="text-center py-3 px-4 font-semibold text-gray-700">Có Hình Ảnh</th>`
+      (no `canImport` gate — always visible).
+- [ ] **Step 3:** In the row, after the `Vị Trí` cell (line 845) and before the `canImport &&` `Thao tác` cell (line 846):
+      `<td className="py-3 px-4 text-center"><Checkbox checked={!!item.productImage} disabled /></td>`
+- [ ] **Step 4:** Both `colSpan={8}` become `colSpan={canImport ? 9 : 7}` (loading row line 815, empty row line 818).
+- [ ] **Step 5:** Run `npm run build`; self-review the diff — the column is not gated, so the header count and both colSpans must line up in both permission cases.
+
+### Task 2: Verify
+
+- [ ] **Step 1:** `npm run build` clean.
+- [ ] **Step 2:** Manual checklist items 20-22 in `docs/specs/warehouse.md`.
+
+### Scope Guard
+- No changes to `lib/db.ts`, `lib/constants.ts`, schema, inventory page, history page, or the edit/import/export modals.
+- Checkbox stays `disabled` (display only, no state, no click handler). No new dependencies.

@@ -5,6 +5,7 @@ import { Sidebar } from '@/components/sidebar'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Archive, Factory, Building, ShoppingBag, FlaskConical, Search, Eye, X, Trash2 } from 'lucide-react'
 import { type Product } from '@/lib/constants'
 import { getAllProducts, deleteProduct, addHistoryEntry } from '@/lib/db'
@@ -102,7 +103,7 @@ export default function InventoryPage() {
             })}
           </div>
 
-          {/* Product Table - STT, Mã hàng, Tên hàng, Số lượng, Thông tin, Xóa */}
+          {/* Product Table - STT, Mã hàng, Tên hàng, Số lượng, Có hình ảnh, Thông tin, Xóa */}
           <Card className={`border-l-4 ${
             currentWarehouse?.color === 'blue' ? 'border-l-blue-600' :
             currentWarehouse?.color === 'orange' ? 'border-l-orange-500' :
@@ -130,13 +131,14 @@ export default function InventoryPage() {
                       <th className="text-left py-3 px-4 font-semibold text-gray-700">Mã Hàng</th>
                       <th className="text-left py-3 px-4 font-semibold text-gray-700">Tên Hàng</th>
                       <th className="text-right py-3 px-4 font-semibold text-gray-700">Số Lượng</th>
+                      <th className="text-center py-3 px-4 font-semibold text-gray-700">Có Hình Ảnh</th>
                       <th className="text-center py-3 px-4 font-semibold text-gray-700">Thông tin</th>
                       {hasEditPermission && <th className="text-center py-3 px-4 font-semibold text-gray-700">Xóa</th>}
                     </tr>
                   </thead>
                   <tbody>
                     {filteredItems.length === 0 ? (
-                      <tr><td colSpan={hasEditPermission ? 6 : 5} className="text-center py-8 text-gray-500"><Archive className="w-16 h-16 mx-auto mb-2 text-gray-300" /><p>Không có sản phẩm tồn kho</p></td></tr>
+                      <tr><td colSpan={hasEditPermission ? 7 : 6} className="text-center py-8 text-gray-500"><Archive className="w-16 h-16 mx-auto mb-2 text-gray-300" /><p>Không có sản phẩm tồn kho</p></td></tr>
                     ) : (
                       filteredItems.map((item, index) => (
                         <tr key={item.id} className="border-b hover:bg-gray-50">
@@ -144,6 +146,9 @@ export default function InventoryPage() {
                           <td className="py-3 px-4"><span className="font-mono font-medium text-blue-600">{item.code}</span></td>
                           <td className="py-3 px-4"><p className="font-medium text-gray-800">{item.name}</p></td>
                           <td className="py-3 px-4 text-right font-medium text-gray-800">{item.quantity.toLocaleString()} {item.unit}</td>
+                          <td className="py-3 px-4 text-center">
+                            <Checkbox checked={!!item.productImage} disabled />
+                          </td>
                           <td className="py-3 px-4 text-center">
                             <Button variant="ghost" size="sm" onClick={() => handleViewDetail(item)} className="hover:bg-blue-100 text-blue-600"><Eye className="h-4 w-4 mr-1" /> Xem</Button>
                           </td>
@@ -192,7 +197,7 @@ export default function InventoryPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="p-3 bg-gray-50 rounded-xl"><p className="text-sm text-gray-500 mb-1">Đơn vị tính</p><p className="font-medium">{selectedProduct.unit}</p></div>
                   <div className="p-3 bg-gray-50 rounded-xl"><p className="text-sm text-gray-500 mb-1">Số lượng tồn</p><p className="font-bold text-green-600">{selectedProduct.quantity.toLocaleString()} {selectedProduct.unit}</p></div>
-                  <div className="p-3 bg-gray-50 rounded-xl"><p className="text-sm text-gray-500 mb-1">Khối lượng</p><p className="font-medium">{selectedProduct.weight} {selectedProduct.weightUnit}</p></div>
+                  <div className="p-3 bg-gray-50 rounded-xl"><p className="text-sm text-gray-500 mb-1">Khối lượng</p><p className="font-medium">{selectedProduct.weight} - {selectedProduct.weightUnit}</p></div>
                   <div className="p-3 bg-gray-50 rounded-xl"><p className="text-sm text-gray-500 mb-1">Vị trí</p><p className="font-medium">{selectedProduct.location}</p></div>
                   <div className="p-3 bg-gray-50 rounded-xl col-span-2"><p className="text-sm text-gray-500 mb-1">Ngày nhập liệu</p><p className="font-medium">{selectedProduct.importDate}</p></div>
                 </div>

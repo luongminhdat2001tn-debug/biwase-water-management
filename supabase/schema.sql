@@ -26,8 +26,6 @@ CREATE TABLE IF NOT EXISTS products (
   name VARCHAR(200) NOT NULL,
   unit VARCHAR(50) DEFAULT '',
   quantity INTEGER DEFAULT 0,
-  price_in BIGINT DEFAULT 0,
-  price_out BIGINT DEFAULT 0,
   weight DECIMAL(10,2) DEFAULT 0,
   location VARCHAR(100) DEFAULT '',
   location_image_url TEXT,
