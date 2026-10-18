@@ -53,24 +53,6 @@ export default function InventoryPage() {
 
   const handleViewDetail = (product: Product) => { setSelectedProduct(product); setIsDetailModalOpen(true) }
 
-  const handleDelete = async (product: Product) => {
-    if (confirm(`Bạn có chắc chắn muốn xóa "${product.name}" khỏi tồn kho?`)) {
-      await deleteProduct(product.id)
-      await addHistoryEntry({
-        date: new Date().toLocaleDateString('vi-VN'),
-        time: new Date().toLocaleTimeString('vi-VN'),
-        warehouse: currentWarehouse?.name || '',
-        productCode: product.code,
-        productName: product.name,
-        userName: user?.name || user?.username || '',
-        action: 'Xóa sản phẩm',
-        quantity: product.quantity,
-        details: `Xóa ${product.quantity} ${product.unit}`,
-      })
-      await loadAllProducts()
-    }
-  }
-
   if (!user) return <div className="flex items-center justify-center h-screen">Loading...</div>
 
   return (
@@ -103,7 +85,7 @@ export default function InventoryPage() {
             })}
           </div>
 
-          {/* Product Table - STT, Mã hàng, Tên hàng, Số lượng, Có hình ảnh, Thông tin, Xóa */}
+          {/* Product Table - STT, Mã hàng, Tên hàng, Số lượng, Có hình ảnh, Thông tin */}
           <Card className={`border-l-4 ${
             currentWarehouse?.color === 'blue' ? 'border-l-blue-600' :
             currentWarehouse?.color === 'orange' ? 'border-l-orange-500' :
@@ -133,7 +115,6 @@ export default function InventoryPage() {
                       <th className="text-right py-3 px-4 font-semibold text-gray-700">Số Lượng</th>
                       <th className="text-center py-3 px-4 font-semibold text-gray-700">Có Hình Ảnh</th>
                       <th className="text-center py-3 px-4 font-semibold text-gray-700">Thông tin</th>
-                      {hasEditPermission && <th className="text-center py-3 px-4 font-semibold text-gray-700">Xóa</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -152,11 +133,6 @@ export default function InventoryPage() {
                           <td className="py-3 px-4 text-center">
                             <Button variant="ghost" size="sm" onClick={() => handleViewDetail(item)} className="hover:bg-blue-100 text-blue-600"><Eye className="h-4 w-4 mr-1" /> Xem</Button>
                           </td>
-                          {hasEditPermission && (
-                            <td className="py-3 px-4 text-center">
-                              <Button variant="ghost" size="sm" onClick={() => handleDelete(item)} className="h-8 w-8 p-0 hover:bg-red-100 text-red-600" title="Xóa"><Trash2 className="h-4 w-4" /></Button>
-                            </td>
-                          )}
                         </tr>
                       ))
                     )}

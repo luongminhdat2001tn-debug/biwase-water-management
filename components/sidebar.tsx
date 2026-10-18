@@ -139,7 +139,7 @@ export function Sidebar() {
             Công ty cổ phần nước
           </p>
           <p className="text-sm font-bold text-white text-center">
-            BIWASE - LONG AN
+            BIWASE LONG AN
           </p>
         </div>
 
