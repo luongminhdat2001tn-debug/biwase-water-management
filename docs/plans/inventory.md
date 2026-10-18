@@ -51,3 +51,67 @@ Steps:
 5. Verify: `npm run build` + manual checklist items 8-12 in `docs/specs/inventory.md`.
 
 Scope guard: no quantity validation (disabled field), no image validation, no new deps.
+
+## Plan: Remove Edit Column/Modal + Name-Injected Delete (English)
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Inventory page loses its `Thao tác` column and edit modal (they now live on the warehouse page); its `Xóa` confirm message shows the product name.
+
+**Architecture:** Pure deletion + one string change in `app/inventory/page.tsx`. The modal's code is preserved on the warehouse page (warehouse plan Tasks 1-4) before this deletion — execute AFTER `docs/plans/warehouse.md` "Edit & Delete Action Columns" Task 2 lands.
+
+**Tech Stack:** Next.js 16 client component. No test framework — verification is `npm run build` + spec manual checklist.
+
+**Spec:** `docs/specs/inventory.md` (both sections).
+
+## Global Constraints
+- Soft delete only (`deleteProduct` → `is_deleted: true`); delete column gate unchanged here: `ton-kho | them-tai-khoan | admin`.
+- Vietnamese UI text + Vietnamese comments.
+- No changes to `lib/db.ts`, `lib/constants.ts`, schema, sidebar.
+- `next build` ignores TS errors — self-review diff after build.
+
+## Review Focus
+- **Delete message exactness:** confirm must read `Bạn có chắc chắn muốn xóa "{product.name}" khỏi tồn kho?` — name injected, no code/quantity in it.
+- **colSpan correctness:** empty-row colSpan drops `hasEditPermission ? 7 : 5` → `hasEditPermission ? 6 : 5`; a wrong colSpan misaligns the empty-state row.
+- **No orphaned imports/state:** after removal, `Edit2`, `Save`, `useRef`-for-edit, upload handlers, duplicate-check effects must have zero remaining references (unused imports won't fail the build but pollute the diff).
+- **Delete still gated + logged:** `Xóa` column must remain permission-gated and still write `Xóa sản phẩm` history.
+
+---
+
+### Task 1: Remove edit column, modal, and all edit-only code
+
+**Files:**
+- Modify: `app/inventory/page.tsx`
+
+**Interfaces:**
+- Consumes: nothing (deletion only).
+- Produces: page with columns `STT, Mã Hàng, Tên Hàng, Số Lượng, Thông tin, Xóa`.
+
+- [ ] **Step 1:** DELETE state + helpers: `isEditModalOpen`, `editingProduct`, `editFormData`, `productImageFile`/`locationImageFile` (edit-modal-only here), `isSaving`, `duplicateInfo`/`checkingCode`/`latestCodeRef`/`duplicateName`/`checkingName`/`latestNameRef`, `editFormErrors`, `clearEditFieldError`, `validateEditForm`, `checkDuplicateCodeForEdit`, `checkDuplicateNameForEdit`, both 400ms debounce `useEffect`s, `handleEdit`, `handleSaveEdit`, `handleProductImageUpload`, `handleLocationImageUpload`.
+- [ ] **Step 2:** DELETE the `Thao tác` `<th>` and its gated `<td>` cell (keep the `Xóa` column + `canEditInventory` gate — rename stays as-is since delete still uses it).
+- [ ] **Step 3:** DELETE the Edit Modal JSX block (`{/* Edit Modal ... */}` through its closing `)}`).
+- [ ] **Step 4:** Update empty-row colSpan: `hasEditPermission ? 7 : 5` → `hasEditPermission ? 6 : 5`.
+- [ ] **Step 5:** Prune now-unused imports (`Edit2`, `Save`, `Upload`, `useRef`, `uploadImage`, `updateProduct`, `findProductByCode`, `normalizeProductCode`, `findProductByNameInWarehouse`) — remove only those with zero remaining references; keep `Eye`, `Trash2`, `deleteProduct`, `addHistoryEntry`, `getAllProducts`.
+- [ ] **Step 6:** Run `npm run build`. Expected: clean.
+
+### Task 2: Name-injected delete confirm
+
+**Files:**
+- Modify: `app/inventory/page.tsx` (`handleDelete`)
+
+**Interfaces:**
+- Consumes: `product` argument already passed in.
+- Produces: unchanged signature `handleDelete(product: Product)`.
+
+- [ ] **Step 1:** Change `confirm('Bạn có chắc chắn muốn xóa sản phẩm khỏi tồn kho?')` → `` confirm(`Bạn có chắc chắn muốn xóa "${product.name}" khỏi tồn kho?`) ``. Leave the rest (delete + history + reload) untouched.
+- [ ] **Step 2:** Run `npm run build`. Expected: clean.
+
+### Task 3: Verify + commit
+
+- [ ] **Step 1:** `npm run build` + re-read diff (type slips).
+- [ ] **Step 2:** Manual checklist items 1-7 in `docs/specs/inventory.md`.
+- [ ] **Step 3:** Commit: `git add app/inventory/page.tsx docs/specs/inventory.md docs/plans/inventory.md` → `feat: move edit off inventory page, show name in delete confirm`.
+
+## Scope Guard
+- No changes to `lib/db.ts`, `lib/constants.ts`, schema, sidebar, or the Xem detail modal.
+- Delete gate (`canEditInventory`) and history logging on delete stay exactly as they are, message aside.

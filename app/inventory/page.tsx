@@ -1,13 +1,13 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Sidebar } from '@/components/sidebar'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Archive, Factory, Building, ShoppingBag, FlaskConical, Search, Eye, X, Edit2, Trash2, Save, Upload } from 'lucide-react'
+import { Archive, Factory, Building, ShoppingBag, FlaskConical, Search, Eye, X, Trash2 } from 'lucide-react'
 import { type Product } from '@/lib/constants'
-import { getAllProducts, updateProduct, deleteProduct, addHistoryEntry, uploadImage, findProductByCode, normalizeProductCode, findProductByNameInWarehouse } from '@/lib/db'
+import { getAllProducts, deleteProduct, addHistoryEntry } from '@/lib/db'
 
 const WAREHOUSES = [
   { id: 'kho-vat-tu', name: 'Kho Vật Tư Nhà Máy', icon: Factory, color: 'blue' },
@@ -23,118 +23,6 @@ export default function InventoryPage() {
   const [allProducts, setAllProducts] = useState<Record<string, Product[]>>({})
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
-  const [editingProduct, setEditingProduct] = useState<Product | null>(null)
-  const [editFormData, setEditFormData] = useState({
-    code: '', name: '', unit: '', quantity: 0, weight: 0, weightUnit: 'kg', location: '', locationImage: '', productImage: '', importDate: ''
-  })
-  const [productImageFile, setProductImageFile] = useState<File | null>(null)
-  const [locationImageFile, setLocationImageFile] = useState<File | null>(null)
-  const [isSaving, setIsSaving] = useState(false)
-
-  // ------------------------------------------
-  // Trạng thái trùng mã (toàn hệ thống) + trùng tên (trong kho hiện tại)
-  // khi sửa sản phẩm tồn kho. Giữ nguyên giá trị gốc thì cho qua,
-  // đổi sang giá trị mới phải chưa tồn tại (trừ chính nó).
-  // ------------------------------------------
-  const [duplicateInfo, setDuplicateInfo] = useState<{ warehouseId: string; warehouseName: string } | null>(null)
-  const [checkingCode, setCheckingCode] = useState(false)
-  const latestCodeRef = useRef('')
-  const [duplicateName, setDuplicateName] = useState(false)
-  const [checkingName, setCheckingName] = useState(false)
-  const latestNameRef = useRef('')
-
-  // Lỗi đỏ cho 7 trường bắt buộc trong form Sửa tồn kho
-  // (hiện sau khi bấm Cập Nhật, tự xóa từng ô khi user sửa lại)
-  const [editFormErrors, setEditFormErrors] = useState<{
-    code?: string; name?: string; unit?: string
-    weight?: string; weightUnit?: string; location?: string; importDate?: string
-  }>({})
-
-  // Xóa lỗi đỏ của 1 ô khi user bắt đầu sửa
-  const clearEditFieldError = (field: keyof typeof editFormErrors) => {
-    setEditFormErrors((prev) => {
-      if (!prev[field]) return prev
-      const next = { ...prev }
-      delete next[field]
-      return next
-    })
-  }
-
-  // Kiểm tra 7 trường bắt buộc, trả về object lỗi (rỗng = hợp lệ)
-  const validateEditForm = () => {
-    const errors: typeof editFormErrors = {}
-    if (!String(editFormData.code || '').trim()) errors.code = 'Vui lòng nhập mã hàng'
-    if (!String(editFormData.name || '').trim()) errors.name = 'Vui lòng nhập tên hàng'
-    if (!String(editFormData.unit || '').trim()) errors.unit = 'Vui lòng nhập đơn vị tính'
-    if (editFormData.weight === '' || editFormData.weight === null || editFormData.weight === undefined || Number(editFormData.weight) <= 0) errors.weight = 'Vui lòng nhập khối lượng lớn hơn 0'
-    if (!String(editFormData.weightUnit || '').trim()) errors.weightUnit = 'Vui lòng nhập đơn vị khối lượng'
-    if (!String(editFormData.location || '').trim()) errors.location = 'Vui lòng nhập vị trí'
-    if (!String(editFormData.importDate || '').trim()) errors.importDate = 'Vui lòng chọn ngày nhập liệu'
-    return errors
-  }
-
-  // Map warehouseId -> tên kho hiển thị
-  const warehouseNameById = (id: string) => WAREHOUSES.find(w => w.id === id)?.name || id
-
-  // Kiểm tra mã trùng toàn hệ thống (bỏ qua chính SP đang sửa)
-  const checkDuplicateCodeForEdit = async (code: string) => {
-    if (!editingProduct) { setDuplicateInfo(null); return null }
-    const normalized = normalizeProductCode(code)
-    if (!normalized) { setDuplicateInfo(null); return null }
-    // Giữ nguyên mã gốc (không phân biệt hoa/thường, khoảng trắng) thì OK
-    if (normalized === normalizeProductCode(editingProduct.code)) { setDuplicateInfo(null); return null }
-    latestCodeRef.current = normalized
-    setCheckingCode(true)
-    try {
-      const found = await findProductByCode(normalized)
-      if (latestCodeRef.current !== normalized) return duplicateInfo
-      const info = found ? { warehouseId: found.warehouseId, warehouseName: warehouseNameById(found.warehouseId) } : null
-      setDuplicateInfo(info)
-      return info
-    } finally {
-      setCheckingCode(false)
-    }
-  }
-
-  // Kiểm tra tên trùng trong kho hiện tại (bỏ qua chính SP đang sửa)
-  const checkDuplicateNameForEdit = async (name: string) => {
-    if (!editingProduct) { setDuplicateName(false); return false }
-    const normalized = (name || '').trim()
-    if (!normalized) { setDuplicateName(false); return false }
-    // Giữ nguyên tên gốc (không phân biệt hoa/thường) thì OK
-    if (normalized.toLowerCase() === (editingProduct.name || '').trim().toLowerCase()) { setDuplicateName(false); return false }
-    const requestKey = `${selectedWarehouse}||${normalized.toLowerCase()}`
-    latestNameRef.current = requestKey
-    setCheckingName(true)
-    try {
-      const found = await findProductByNameInWarehouse(normalized, selectedWarehouse)
-      if (latestNameRef.current !== requestKey) return duplicateName
-      const isDup = !!found && found.id !== editingProduct.id
-      setDuplicateName(isDup)
-      return isDup
-    } finally {
-      setCheckingName(false)
-    }
-  }
-
-  // Live-check khi sửa mã hàng (debounce 400ms)
-  useEffect(() => {
-    if (!isEditModalOpen || !editingProduct) return
-    const code = editFormData.code
-    if (!normalizeProductCode(code) || normalizeProductCode(code) === normalizeProductCode(editingProduct.code)) { setDuplicateInfo(null); return }
-    const t = setTimeout(() => { checkDuplicateCodeForEdit(code) }, 400)
-    return () => clearTimeout(t)
-  }, [editFormData.code, isEditModalOpen, editingProduct])
-
-  // Live-check khi sửa tên hàng (debounce 400ms)
-  useEffect(() => {
-    if (!isEditModalOpen || !editingProduct) return
-    const name = editFormData.name
-    if (!(name || '').trim() || (name || '').trim().toLowerCase() === (editingProduct.name || '').trim().toLowerCase()) { setDuplicateName(false); return }
-    const t = setTimeout(() => { checkDuplicateNameForEdit(name) }, 400)
-    return () => clearTimeout(t)
-  }, [editFormData.name, selectedWarehouse, isEditModalOpen, editingProduct])
 
   const loadAllProducts = async () => {
     const data = await getAllProducts()
@@ -148,6 +36,7 @@ export default function InventoryPage() {
     loadAllProducts()
   }, [])
 
+  // Quyền xóa sản phẩm tồn kho (sửa sản phẩm đã chuyển sang trang Quản Lý Kho)
   const canEditInventory = () => {
     if (!user) return false
     const perms = Array.isArray(user.chucNang) ? user.chucNang : [user.chucNang || '']
@@ -163,113 +52,8 @@ export default function InventoryPage() {
 
   const handleViewDetail = (product: Product) => { setSelectedProduct(product); setIsDetailModalOpen(true) }
 
-  const handleEdit = (product: Product) => {
-    setEditingProduct(product)
-    setEditFormData({
-      code: product.code, name: product.name, unit: product.unit, quantity: product.quantity,
-      weight: product.weight,
-      weightUnit: product.weightUnit || 'kg',
-      location: product.location, locationImage: product.locationImage, productImage: product.productImage || '', importDate: product.importDate,
-    })
-    setProductImageFile(null)
-    setLocationImageFile(null)
-    setDuplicateInfo(null)
-    setDuplicateName(false)
-    setCheckingCode(false)
-    setCheckingName(false)
-    latestCodeRef.current = ''
-    latestNameRef.current = ''
-    setEditFormErrors({})
-    setIsEditModalOpen(true)
-  }
-
-  const handleSaveEdit = async () => {
-    if (!editingProduct) return
-    setIsSaving(true)
-
-    // Kiểm tra 7 trường bắt buộc trước -> hiện cảnh báo đỏ từng ô, chặn lưu
-    const errors = validateEditForm()
-    if (Object.keys(errors).length > 0) {
-      setEditFormErrors(errors)
-      setIsSaving(false)
-      return
-    }
-    setEditFormErrors({})
-
-    // Chặn trùng mã toàn hệ thống + trùng tên trong cùng kho
-    // (giữ nguyên giá trị gốc thì cho qua, đổi sang giá trị đã tồn tại thì chặn)
-    const codeDup = await checkDuplicateCodeForEdit(editFormData.code)
-    if (codeDup) {
-      alert('Mã hàng này đã tồn tại. Vui lòng kiểm tra lại')
-      setIsSaving(false)
-      return
-    }
-    const nameDup = await checkDuplicateNameForEdit(editFormData.name)
-    if (nameDup) {
-      alert('Tên hàng này đã tồn tại. Vui lòng kiểm tra lại!')
-      setIsSaving(false)
-      return
-    }
-
-    // Upload ảnh mới nếu có
-    let productImageUrl = editFormData.productImage
-    let locationImageUrl = editFormData.locationImage
-
-    if (productImageFile) {
-      const url = await uploadImage(productImageFile, 'products')
-      if (url) productImageUrl = url
-    }
-    if (locationImageFile) {
-      const url = await uploadImage(locationImageFile, 'locations')
-      if (url) locationImageUrl = url
-    }
-
-    // Ghi lại chi tiết thay đổi
-    const changes: string[] = []
-    const old = currentItems.find(p => p.id === editingProduct.id)
-    if (old) {
-      if (old.weight !== editFormData.weight || (old.weightUnit || 'kg') !== editFormData.weightUnit) changes.push(`Khối lượng: ${old.weight}${old.weightUnit || 'kg'} → ${editFormData.weight}${editFormData.weightUnit}`)
-      if (old.name !== editFormData.name) changes.push(`Tên: ${old.name} → ${editFormData.name}`)
-      if (old.location !== editFormData.location) changes.push(`Vị trí: ${old.location} → ${editFormData.location}`)
-      if (old.locationImage !== locationImageUrl) changes.push('Ảnh vị trí: đã cập nhật')
-      if ((old.productImage || '') !== productImageUrl) changes.push('Ảnh sản phẩm: đã cập nhật')
-    }
-
-    // Cập nhật DB (giữ nguyên quantity)
-    const ok = await updateProduct(editingProduct.id, {
-      ...editFormData,
-      productImage: productImageUrl,
-      locationImage: locationImageUrl,
-      quantity: editingProduct.quantity, // Giữ nguyên số lượng
-    })
-
-    if (!ok) {
-      alert('❌ Cập nhật thất bại! Vui lòng thử lại.')
-      setIsSaving(false)
-      return
-    }
-
-    // Log lịch sử
-    await addHistoryEntry({
-      date: new Date().toLocaleDateString('vi-VN'),
-      time: new Date().toLocaleTimeString('vi-VN'),
-      warehouse: currentWarehouse?.name || '',
-      productCode: editFormData.code,
-      productName: editFormData.name,
-      userName: user?.name || user?.username || '',
-      action: 'Tồn kho',
-      quantity: editFormData.quantity,
-      details: changes.length > 0 ? changes.join(', ') : 'Không có thay đổi',
-    })
-
-    setIsSaving(false)
-    await loadAllProducts()
-    setIsEditModalOpen(false)
-    alert('✅ Cập nhật sản phẩm thành công!')
-  }
-
   const handleDelete = async (product: Product) => {
-    if (confirm('Bạn có chắc chắn muốn xóa sản phẩm khỏi tồn kho?')) {
+    if (confirm(`Bạn có chắc chắn muốn xóa "${product.name}" khỏi tồn kho?`)) {
       await deleteProduct(product.id)
       await addHistoryEntry({
         date: new Date().toLocaleDateString('vi-VN'),
@@ -283,26 +67,6 @@ export default function InventoryPage() {
         details: `Xóa ${product.quantity} ${product.unit}`,
       })
       await loadAllProducts()
-    }
-  }
-
-  const handleProductImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      setProductImageFile(file)
-      const reader = new FileReader()
-      reader.onloadend = () => setEditFormData({ ...editFormData, productImage: reader.result as string })
-      reader.readAsDataURL(file)
-    }
-  }
-
-  const handleLocationImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      setLocationImageFile(file)
-      const reader = new FileReader()
-      reader.onloadend = () => setEditFormData({ ...editFormData, locationImage: reader.result as string })
-      reader.readAsDataURL(file)
     }
   }
 
@@ -338,7 +102,7 @@ export default function InventoryPage() {
             })}
           </div>
 
-          {/* Product Table - Cấu trúc mới: STT, Mã hàng, Tên hàng, Số lượng, Thông tin, Thao tác, Xóa */}
+          {/* Product Table - STT, Mã hàng, Tên hàng, Số lượng, Thông tin, Xóa */}
           <Card className={`border-l-4 ${
             currentWarehouse?.color === 'blue' ? 'border-l-blue-600' :
             currentWarehouse?.color === 'orange' ? 'border-l-orange-500' :
@@ -367,13 +131,12 @@ export default function InventoryPage() {
                       <th className="text-left py-3 px-4 font-semibold text-gray-700">Tên Hàng</th>
                       <th className="text-right py-3 px-4 font-semibold text-gray-700">Số Lượng</th>
                       <th className="text-center py-3 px-4 font-semibold text-gray-700">Thông tin</th>
-                      {hasEditPermission && <th className="text-center py-3 px-4 font-semibold text-gray-700">Thao tác</th>}
                       {hasEditPermission && <th className="text-center py-3 px-4 font-semibold text-gray-700">Xóa</th>}
                     </tr>
                   </thead>
                   <tbody>
                     {filteredItems.length === 0 ? (
-                      <tr><td colSpan={hasEditPermission ? 7 : 5} className="text-center py-8 text-gray-500"><Archive className="w-16 h-16 mx-auto mb-2 text-gray-300" /><p>Không có sản phẩm tồn kho</p></td></tr>
+                      <tr><td colSpan={hasEditPermission ? 6 : 5} className="text-center py-8 text-gray-500"><Archive className="w-16 h-16 mx-auto mb-2 text-gray-300" /><p>Không có sản phẩm tồn kho</p></td></tr>
                     ) : (
                       filteredItems.map((item, index) => (
                         <tr key={item.id} className="border-b hover:bg-gray-50">
@@ -384,11 +147,6 @@ export default function InventoryPage() {
                           <td className="py-3 px-4 text-center">
                             <Button variant="ghost" size="sm" onClick={() => handleViewDetail(item)} className="hover:bg-blue-100 text-blue-600"><Eye className="h-4 w-4 mr-1" /> Xem</Button>
                           </td>
-                          {hasEditPermission && (
-                            <td className="py-3 px-4 text-center">
-                              <Button variant="ghost" size="sm" onClick={() => handleEdit(item)} className="h-8 w-8 p-0 hover:bg-blue-100 text-blue-600" title="Sửa"><Edit2 className="h-4 w-4" /></Button>
-                            </td>
-                          )}
                           {hasEditPermission && (
                             <td className="py-3 px-4 text-center">
                               <Button variant="ghost" size="sm" onClick={() => handleDelete(item)} className="h-8 w-8 p-0 hover:bg-red-100 text-red-600" title="Xóa"><Trash2 className="h-4 w-4" /></Button>
@@ -439,74 +197,6 @@ export default function InventoryPage() {
                   <div className="p-3 bg-gray-50 rounded-xl col-span-2"><p className="text-sm text-gray-500 mb-1">Ngày nhập liệu</p><p className="font-medium">{selectedProduct.importDate}</p></div>
                 </div>
                 <div className="flex gap-3 mt-6"><Button variant="outline" onClick={() => setIsDetailModalOpen(false)} className="flex-1">Đóng</Button></div>
-              </div>
-            </div>
-          )}
-
-          {/* Edit Modal - Sửa thông tin (SỐ LƯỢNG KHÔNG CHO SỬA) */}
-          {isEditModalOpen && editingProduct && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-              <div className="bg-white rounded-2xl p-6 w-full max-w-4xl shadow-2xl max-h-[90vh] overflow-y-auto">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-xl font-bold text-gray-800">Sửa Sản Phẩm Tồn Kho</h2>
-                  <button onClick={() => setIsEditModalOpen(false)} className="p-1 hover:bg-gray-100 rounded-lg"><X className="w-5 h-5 text-gray-500" /></button>
-                </div>
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 text-sm text-amber-700">
-                  ⚠️ Lưu ý: Số lượng tồn kho KHÔNG được phép thay đổi tại đây.
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Mã hàng *</label><Input value={editFormData.code} onChange={(e) => { setEditFormData({...editFormData, code: e.target.value}); clearEditFieldError('code') }} className={`border-2 ${duplicateInfo || editFormErrors.code ? 'border-red-500 bg-red-50' : ''}`} />{checkingCode && !duplicateInfo && !editFormErrors.code && (<p className="text-gray-500 text-xs mt-1">Đang kiểm tra...</p>)}{duplicateInfo && (<p className="text-red-600 text-xs mt-1 font-medium">⚠️ Mã hàng này đã tồn tại (tại {duplicateInfo.warehouseName}). Vui lòng kiểm tra lại</p>)}{editFormErrors.code && (<p className="text-red-600 text-xs mt-1 font-medium">⚠️ {editFormErrors.code}</p>)}</div>
-                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Tên hàng *</label><Input value={editFormData.name} onChange={(e) => { setEditFormData({...editFormData, name: e.target.value}); clearEditFieldError('name') }} className={`border-2 ${duplicateName || editFormErrors.name ? 'border-red-500 bg-red-50' : ''}`} />{checkingName && !duplicateName && !editFormErrors.name && (<p className="text-gray-500 text-xs mt-1">Đang kiểm tra...</p>)}{duplicateName && (<p className="text-red-600 text-xs mt-1 font-medium">⚠️ Tên hàng này đã tồn tại trong kho này. Vui lòng kiểm tra lại</p>)}{editFormErrors.name && (<p className="text-red-600 text-xs mt-1 font-medium">⚠️ {editFormErrors.name}</p>)}</div>
-                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Đơn vị tính *</label><Input value={editFormData.unit} onChange={(e) => { setEditFormData({...editFormData, unit: e.target.value}); clearEditFieldError('unit') }} className={`border-2 ${editFormErrors.unit ? 'border-red-500 bg-red-50' : ''}`} />{editFormErrors.unit && (<p className="text-red-600 text-xs mt-1 font-medium">⚠️ {editFormErrors.unit}</p>)}</div>
-                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Số lượng (không thể sửa)</label><Input type="number" value={editFormData.quantity} className="border-2 bg-gray-100 cursor-not-allowed" disabled /></div>
-                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Khối lượng *</label>
-                    <div className="flex gap-2">
-                      <Input type="number" step="0.1" value={editFormData.weight} onChange={(e) => { setEditFormData({...editFormData, weight: Number(e.target.value)}); clearEditFieldError('weight') }} className={`border-2 flex-1 ${editFormErrors.weight ? 'border-red-500 bg-red-50' : ''}`} />
-                      <Input type="text" value={editFormData.weightUnit} onChange={(e) => { setEditFormData({...editFormData, weightUnit: e.target.value}); clearEditFieldError('weightUnit') }} className={`border-2 w-24 ${editFormErrors.weightUnit ? 'border-red-500 bg-red-50' : ''}`} placeholder="Đơn vị" />
-                    </div>
-                    {editFormErrors.weight && (<p className="text-red-600 text-xs mt-1 font-medium">⚠️ {editFormErrors.weight}</p>)}
-                    {editFormErrors.weightUnit && (<p className="text-red-600 text-xs mt-1 font-medium">⚠️ {editFormErrors.weightUnit}</p>)}
-                    <p className="text-xs text-gray-400 mt-1">VD: kg, g, lít, ml, chai...</p>
-                  </div>
-                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Vị trí *</label><Input value={editFormData.location} onChange={(e) => { setEditFormData({...editFormData, location: e.target.value}); clearEditFieldError('location') }} className={`border-2 ${editFormErrors.location ? 'border-red-500 bg-red-50' : ''}`} />{editFormErrors.location && (<p className="text-red-600 text-xs mt-1 font-medium">⚠️ {editFormErrors.location}</p>)}</div>
-                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Ngày nhập liệu *</label><Input type="date" value={editFormData.importDate} onChange={(e) => { setEditFormData({...editFormData, importDate: e.target.value}); clearEditFieldError('importDate') }} className={`border-2 ${editFormErrors.importDate ? 'border-red-500 bg-red-50' : ''}`} />{editFormErrors.importDate && (<p className="text-red-600 text-xs mt-1 font-medium">⚠️ {editFormErrors.importDate}</p>)}</div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">📷 Ảnh sản phẩm</label>
-                    <div className="flex gap-4 items-start">
-                      <label className="flex items-center gap-2 px-4 py-3 bg-blue-50 border-2 border-dashed border-blue-300 rounded-lg cursor-pointer hover:bg-blue-100 transition-colors flex-1">
-                        <Upload className="w-5 h-5 text-blue-500" /><span className="text-sm text-blue-600">Upload ảnh SP</span>
-                        <input type="file" accept="image/*" onChange={handleProductImageUpload} className="hidden" />
-                      </label>
-                      {editFormData.productImage && (
-                        <div className="relative">
-                          <img src={editFormData.productImage} alt="Ảnh SP" className="w-24 h-24 object-cover rounded-lg border-2 border-blue-200" />
-                          <button onClick={() => setEditFormData({...editFormData, productImage: ''})} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-600"><X className="w-4 h-4" /></button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">📍 Ảnh vị trí</label>
-                    <div className="flex gap-4 items-start">
-                      <label className="flex items-center gap-2 px-4 py-3 bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-200 transition-colors flex-1">
-                        <Upload className="w-5 h-5 text-gray-500" /><span className="text-sm text-gray-600">Upload ảnh vị trí</span>
-                        <input type="file" accept="image/*" onChange={handleLocationImageUpload} className="hidden" />
-                      </label>
-                      {editFormData.locationImage && (
-                        <div className="relative">
-                          <img src={editFormData.locationImage} alt="Ảnh vị trí" className="w-24 h-24 object-cover rounded-lg border-2" />
-                          <button onClick={() => setEditFormData({...editFormData, locationImage: ''})} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-600"><X className="w-4 h-4" /></button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex gap-3 mt-6">
-                  <Button variant="outline" onClick={() => setIsEditModalOpen(false)} className="flex-1">Hủy</Button>
-                  <Button onClick={handleSaveEdit} className="flex-1 bg-blue-600 hover:bg-blue-700" disabled={isSaving || checkingCode || checkingName || !!duplicateInfo || duplicateName}>
-                    <Save className="w-4 h-4 mr-2" /> {isSaving ? 'Đang cập nhật...' : 'Cập Nhật'}
-                  </Button>
-                </div>
               </div>
             </div>
           )}
