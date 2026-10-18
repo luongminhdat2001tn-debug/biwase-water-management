@@ -62,6 +62,62 @@ Shared shell via `components/sidebar.tsx`. All Supabase access via `lib/db.ts`.
   everything loads per selected warehouse.
 - Permission IDs are defined in `docs/specs/account.md`.
 
+## Feature: Edit & Delete Action Columns ("Thao tác", "Xóa")
+- Table gains two columns at the end of the product table in `app/warehouse/page.tsx`:
+  - `Thao tác`: ghost icon button (`Edit2`, title `Sửa`) -> opens the edit modal.
+  - `Xóa`: ghost icon button (`Trash2`, title `Xóa`) -> confirm + soft delete.
+- Gate (approved): BOTH columns (header `th` + cell) render only when `canImport`
+  (`user?.isAdmin || chucNang.includes('nhap-lieu')`) — the same constant already used
+  for the header buttons (line ~475). Not `ton-kho`.
+  - Accepted consequence (explicitly approved): a user with ONLY `ton-kho` /
+    `them-tai-khoan` loses edit/delete ability everywhere once the edit form leaves
+    the inventory page. Header buttons keep their existing `nhap-lieu`/`xuat-kho` gates;
+    `canAccessWarehouse` tab gating unchanged.
+- Column count 6 -> 8; the existing `colSpan={8}` on loading/empty rows already matches,
+  no colSpan change needed.
+
+### Edit modal (moved from `app/inventory/page.tsx`, behavior unchanged)
+- Dedicated modal `isEditModalOpen` (NOT the Nhập Liệu modal): title `Sửa Sản Phẩm Tồn Kho`.
+- Quantity: `disabled`, labeled `Số lượng (không thể sửa)`; banner
+  `⚠️ Lưu ý: Số lượng tồn kho KHÔNG được phép thay đổi tại đây.` Save keeps `quantity: editingProduct.quantity`.
+- Mandatory (7): `code`, `name`, `unit`, `weight` (> 0), `weightUnit`, `location`,
+  `importDate`. Optional: `productImage`, `locationImage`.
+  - Validate FIRST on `handleSaveEdit`; any invalid -> inline red per field
+    (`border-red-500 bg-red-50` + `⚠️ ... <p>`), block save before any DB call.
+  - Messages identical to `docs/specs/inventory.md` (feature moved here verbatim).
+  - Each input `onChange` clears its own error; `editFormErrors` reset on modal open.
+- Duplicate checks (run only after mandatory passes), unchanged from the inventory spec:
+  - Code: global across all 4 warehouses. Keep original value (`normalizeProductCode`
+    equal) -> allowed; changed -> `findProductByCode`, hit = duplicate warning naming the
+    warehouse (`warehouseNameById`).
+  - Name: unique within `selectedWarehouse` only. Keep original (`trim().toLowerCase()`
+    equal) -> allowed; changed -> `findProductByNameInWarehouse`, duplicate only when
+    `found && found.id !== editingProduct.id`.
+  - 400ms debounce live-check + `editLatestCodeRef` / `editLatestNameRef` race guards;
+    states reset on open. Save button disabled while
+    `isEditSaving || editCheckingCode || editCheckingName || editDuplicateInfo || editDuplicateName`.
+- Save: upload new images if files chosen (`uploadImage`), diff old vs new fields into a
+  `changes[]` string, `updateProduct`, then `addHistoryEntry` with `action: 'Tồn kho'`,
+  `details: changes.join(', ')` (or `Không có thay đổi`), then reload products.
+
+### Delete
+- Confirm message (both pages, name injected):
+  `Bạn có chắc chắn muốn xóa "{product.name}" khỏi tồn kho?`
+- On confirm: `deleteProduct(id)` (soft, `is_deleted: true` — NEVER hard delete),
+  then `addHistoryEntry` with `action: 'Xóa sản phẩm'`, `quantity: product.quantity`,
+  `details: Xóa {quantity} {unit}` (warehouse delete becomes auditable; it is silent today),
+  then `loadProducts(selectedWarehouse)`.
+
+### Removals (one edit form, not two)
+- Delete never-rendered `handleEdit` / `handleDelete` (pre-edit versions) from warehouse.
+- `Nhập Liệu` modal becomes create-only: unconditional title `Nhập Liệu`, code input
+  loses `disabled={!!editingProduct}`, `handleSave` drops the `updateProduct` branch and
+  the `if (!editingProduct)` skip around the global code check (always check on create),
+  `editingProduct` state (import-modal's) removed. Import/create duplicate checks,
+  export, addmore, mandatory-8 validation, and history logging unchanged.
+- Files: `app/warehouse/page.tsx` (+ this spec). No changes to `lib/db.ts`,
+  `lib/constants.ts`, `supabase/schema.sql`, sidebar, or history page.
+
 ## Validation Rules
 - Empty = `''`, `null`, `undefined`, or whitespace-only for strings.
 - `quantity` / `weight`: empty string counts as missing; `0` is treated as missing
@@ -83,3 +139,24 @@ Shared shell via `components/sidebar.tsx`. All Supabase access via `lib/db.ts`.
 9. Export: valid qty + reason -> quantity decreases and
    history `details` contains `— Lý do: ...` (visible in Lich Su + Excel).
 10. `npm run build` passes.
+
+## Manual Test Checklist (Edit & Delete columns)
+11. User with `nhap-lieu` (or admin): both `Thao tác` and `Xóa` columns visible on the
+    warehouse product table; user without it: both columns hidden (header + cells), while
+    `Xem`-style read access and header buttons behave as before.
+12. Click `Sửa` -> "Sửa Sản Phẩm Tồn Kho" opens with quantity DISABLED + amber banner;
+    the Nhập Liệu modal still opens create-only from the header button (title `Nhập Liệu`,
+    code field editable, save creates a new product).
+13. Edit: clear one of the 7 mandatory fields -> red inline error, save blocked; retype ->
+    red clears live.
+14. Edit: change Mã to a code existing in ANOTHER warehouse -> red warning names that
+    warehouse, save blocked; keep original Mã -> allowed.
+15. Edit: change Tên to a name existing in the SAME warehouse -> red warning, blocked;
+    name existing only in another warehouse -> allowed.
+16. Edit valid -> product updated, history row with `action = Tồn kho` and change details
+    appears in Lịch Sử; quantity unchanged.
+17. Click `Xóa` -> confirm shows the product NAME; cancel leaves it, confirm soft-deletes,
+    row disappears, history row `action = Xóa sản phẩm` appears.
+18. Repeat 11-17 on the Tồn Kho page for its `Xóa` column (name-injected message) and
+    confirm `Thao tác`/edit modal are GONE from Tồn Kho.
+19. `npm run build` passes.

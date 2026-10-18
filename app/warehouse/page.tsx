@@ -122,13 +122,14 @@ export default function WarehousePage() {
   }
 
   // Live-check khi user gõ mã hàng (debounce 400ms để đỡ spam DB)
+  // (chỉ dùng khi THÊM MỚI — sửa sản phẩm dùng modal riêng bên dưới)
   useEffect(() => {
-    if (!isModalOpen || modalType !== 'import' || editingProduct) return
+    if (!isModalOpen || modalType !== 'import') return
     const code = formData.code
     if (!normalizeProductCode(code)) { setDuplicateInfo(null); return }
     const t = setTimeout(() => { checkDuplicateGlobally(code) }, 400)
     return () => clearTimeout(t)
-  }, [formData.code, isModalOpen, modalType, editingProduct])
+  }, [formData.code, isModalOpen, modalType])
 
   // ------------------------------------------
   // Trạng thái trùng tên trong kho HIỆN TẠI
@@ -141,7 +142,6 @@ export default function WarehousePage() {
   const latestNameRef = useRef('')
 
   // Query DB kiểm tra tên đã tồn tại trong kho hiện tại chưa
-  // Khi sửa: bỏ qua chính sản phẩm đang sửa (giữ nguyên tên vẫn OK)
   const checkDuplicateName = async (name: string) => {
     const normalized = (name || '').trim()
     if (!normalized) { setDuplicateName(false); return false }
@@ -152,7 +152,7 @@ export default function WarehousePage() {
       const found = await findProductByNameInWarehouse(normalized, selectedWarehouse)
       // Chỉ nhận kết quả nếu user chưa gõ tên/kho khác trong lúc chờ
       if (latestNameRef.current !== requestKey) return duplicateName
-      const isDup = !!found && (!editingProduct || found.id !== editingProduct.id)
+      const isDup = !!found
       setDuplicateName(isDup)
       return isDup
     } finally {
@@ -167,7 +167,119 @@ export default function WarehousePage() {
     if (!(name || '').trim()) { setDuplicateName(false); return }
     const t = setTimeout(() => { checkDuplicateName(name) }, 400)
     return () => clearTimeout(t)
-  }, [formData.name, selectedWarehouse, isModalOpen, modalType, editingProduct])
+  }, [formData.name, selectedWarehouse, isModalOpen, modalType])
+
+  // ------------------------------------------
+  // Modal SỬA SẢN PHẨM TỒN KHO (di chuyển từ trang Tồn Kho)
+  // - Không cho sửa số lượng
+  // - 7 trường bắt buộc: mã, tên, đơn vị, khối lượng, đơn vị khối lượng, vị trí, ngày nhập
+  // - Check trùng mã toàn hệ thống + trùng tên trong kho hiện tại
+  // - editingProduct tái sử dụng state dòng trên (modal nhập liệu sẽ chỉ để thêm mới)
+  // ------------------------------------------
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [editFormData, setEditFormData] = useState({
+    code: '', name: '', unit: '', quantity: 0, weight: 0, weightUnit: 'kg', location: '', locationImage: '', productImage: '', importDate: ''
+  })
+  const [editProductImageFile, setEditProductImageFile] = useState<File | null>(null)
+  const [editLocationImageFile, setEditLocationImageFile] = useState<File | null>(null)
+  const [isEditSaving, setIsEditSaving] = useState(false)
+
+  // Lỗi đỏ cho 7 trường bắt buộc trong form Sửa tồn kho
+  // (hiện sau khi bấm Cập Nhật, tự xóa từng ô khi user sửa lại)
+  const [editFormErrors, setEditFormErrors] = useState<{
+    code?: string; name?: string; unit?: string
+    weight?: string; weightUnit?: string; location?: string; importDate?: string
+  }>({})
+
+  // Xóa lỗi đỏ của 1 ô khi user bắt đầu sửa
+  const clearEditFieldError = (field: keyof typeof editFormErrors) => {
+    setEditFormErrors((prev) => {
+      if (!prev[field]) return prev
+      const next = { ...prev }
+      delete next[field]
+      return next
+    })
+  }
+
+  // Kiểm tra 7 trường bắt buộc, trả về object lỗi (rỗng = hợp lệ)
+  const validateEditForm = () => {
+    const errors: typeof editFormErrors = {}
+    if (!String(editFormData.code || '').trim()) errors.code = 'Vui lòng nhập mã hàng'
+    if (!String(editFormData.name || '').trim()) errors.name = 'Vui lòng nhập tên hàng'
+    if (!String(editFormData.unit || '').trim()) errors.unit = 'Vui lòng nhập đơn vị tính'
+    if (!editFormData.weight || Number(editFormData.weight) <= 0) errors.weight = 'Vui lòng nhập khối lượng lớn hơn 0'
+    if (!String(editFormData.weightUnit || '').trim()) errors.weightUnit = 'Vui lòng nhập đơn vị khối lượng'
+    if (!String(editFormData.location || '').trim()) errors.location = 'Vui lòng nhập vị trí'
+    if (!String(editFormData.importDate || '').trim()) errors.importDate = 'Vui lòng chọn ngày nhập liệu'
+    return errors
+  }
+
+  // Trạng thái trùng mã (toàn hệ thống) + trùng tên (trong kho hiện tại)
+  // khi sửa sản phẩm tồn kho. Giữ nguyên giá trị gốc thì cho qua,
+  // đổi sang giá trị mới phải chưa tồn tại (trừ chính nó).
+  const [editDuplicateInfo, setEditDuplicateInfo] = useState<{ warehouseId: string; warehouseName: string } | null>(null)
+  const [editCheckingCode, setEditCheckingCode] = useState(false)
+  const editLatestCodeRef = useRef('')
+  const [editDuplicateName, setEditDuplicateName] = useState(false)
+  const [editCheckingName, setEditCheckingName] = useState(false)
+  const editLatestNameRef = useRef('')
+
+  // Kiểm tra mã trùng toàn hệ thống (bỏ qua chính SP đang sửa)
+  const checkEditDuplicateCode = async (code: string) => {
+    if (!editingProduct) { setEditDuplicateInfo(null); return null }
+    const normalized = normalizeProductCode(code)
+    if (!normalized) { setEditDuplicateInfo(null); return null }
+    if (normalized === normalizeProductCode(editingProduct.code)) { setEditDuplicateInfo(null); return null }
+    editLatestCodeRef.current = normalized
+    setEditCheckingCode(true)
+    try {
+      const found = await findProductByCode(normalized)
+      if (editLatestCodeRef.current !== normalized) return editDuplicateInfo
+      const info = found ? { warehouseId: found.warehouseId, warehouseName: warehouseNameById(found.warehouseId) } : null
+      setEditDuplicateInfo(info)
+      return info
+    } finally {
+      setEditCheckingCode(false)
+    }
+  }
+
+  // Kiểm tra tên trùng trong kho hiện tại (bỏ qua chính SP đang sửa)
+  const checkEditDuplicateName = async (name: string) => {
+    if (!editingProduct) { setEditDuplicateName(false); return false }
+    const normalized = (name || '').trim()
+    if (!normalized) { setEditDuplicateName(false); return false }
+    if (normalized.toLowerCase() === (editingProduct.name || '').trim().toLowerCase()) { setEditDuplicateName(false); return false }
+    const requestKey = `${selectedWarehouse}||${normalized.toLowerCase()}`
+    editLatestNameRef.current = requestKey
+    setEditCheckingName(true)
+    try {
+      const found = await findProductByNameInWarehouse(normalized, selectedWarehouse)
+      if (editLatestNameRef.current !== requestKey) return editDuplicateName
+      const isDup = !!found && found.id !== editingProduct.id
+      setEditDuplicateName(isDup)
+      return isDup
+    } finally {
+      setEditCheckingName(false)
+    }
+  }
+
+  // Live-check khi sửa mã hàng (debounce 400ms)
+  useEffect(() => {
+    if (!isEditModalOpen || !editingProduct) return
+    const code = editFormData.code
+    if (!normalizeProductCode(code) || normalizeProductCode(code) === normalizeProductCode(editingProduct.code)) { setEditDuplicateInfo(null); return }
+    const t = setTimeout(() => { checkEditDuplicateCode(code) }, 400)
+    return () => clearTimeout(t)
+  }, [editFormData.code, isEditModalOpen, editingProduct])
+
+  // Live-check khi sửa tên hàng (debounce 400ms)
+  useEffect(() => {
+    if (!isEditModalOpen || !editingProduct) return
+    const name = editFormData.name
+    if (!(name || '').trim() || (name || '').trim().toLowerCase() === (editingProduct.name || '').trim().toLowerCase()) { setEditDuplicateName(false); return }
+    const t = setTimeout(() => { checkEditDuplicateName(name) }, 400)
+    return () => clearTimeout(t)
+  }, [editFormData.name, selectedWarehouse, isEditModalOpen, editingProduct])
 
   // Load products từ Supabase khi chọn kho
   const loadProducts = async (warehouseId: string) => {
@@ -219,7 +331,6 @@ export default function WarehousePage() {
   // Mở modal Nhập liệu mới
   // ------------------------------------------
   const handleImport = () => {
-    setEditingProduct(null)
     setModalType('import')
     setDuplicateInfo(null)
     setDuplicateName(false)
@@ -341,13 +452,10 @@ export default function WarehousePage() {
     await loadProducts(selectedWarehouse)
   }
 
-  // Sửa sản phẩm
+  // Sửa sản phẩm (modal SỬA SẢN PHẨM TỒN KHO — không cho sửa số lượng)
   const handleEdit = (product: Product) => {
     setEditingProduct(product)
-    setModalType('import')
-    setDuplicateName(false)
-    setFormErrors({})
-    setFormData({
+    setEditFormData({
       code: product.code,
       name: product.name,
       unit: product.unit,
@@ -359,15 +467,119 @@ export default function WarehousePage() {
       productImage: product.productImage || '',
       importDate: product.importDate,
     })
-    setProductImageFile(null)
-    setLocationImageFile(null)
-    setIsModalOpen(true)
+    setEditProductImageFile(null)
+    setEditLocationImageFile(null)
+    setEditDuplicateInfo(null)
+    setEditDuplicateName(false)
+    setEditCheckingCode(false)
+    setEditCheckingName(false)
+    editLatestCodeRef.current = ''
+    editLatestNameRef.current = ''
+    setEditFormErrors({})
+    setIsEditModalOpen(true)
   }
 
-  // Xóa sản phẩm (soft delete)
-  const handleDelete = async (productId: number) => {
-    if (confirm('Bạn có chắc chắn muốn xóa sản phẩm này?')) {
-      await deleteProduct(productId)
+  // Lưu chỉnh sửa từ modal Sửa Sản Phẩm Tồn Kho (giữ nguyên số lượng)
+  const handleSaveEdit = async () => {
+    if (!editingProduct) return
+    setIsEditSaving(true)
+
+    // Kiểm tra 7 trường bắt buộc trước -> hiện cảnh báo đỏ từng ô, chặn lưu
+    const errors = validateEditForm()
+    if (Object.keys(errors).length > 0) {
+      setEditFormErrors(errors)
+      setIsEditSaving(false)
+      return
+    }
+    setEditFormErrors({})
+
+    // Chặn trùng mã toàn hệ thống + trùng tên trong cùng kho
+    // (giữ nguyên giá trị gốc thì cho qua, đổi sang giá trị đã tồn tại thì chặn)
+    const codeDup = await checkEditDuplicateCode(editFormData.code)
+    if (codeDup) {
+      alert('Mã hàng này đã tồn tại. Vui lòng kiểm tra lại')
+      setIsEditSaving(false)
+      return
+    }
+    const nameDup = await checkEditDuplicateName(editFormData.name)
+    if (nameDup) {
+      alert('Tên hàng này đã tồn tại. Vui lòng kiểm tra lại!')
+      setIsEditSaving(false)
+      return
+    }
+
+    // Upload ảnh mới nếu có
+    let productImageUrl = editFormData.productImage
+    let locationImageUrl = editFormData.locationImage
+
+    if (editProductImageFile) {
+      const url = await uploadImage(editProductImageFile, 'products')
+      if (url) productImageUrl = url
+    }
+    if (editLocationImageFile) {
+      const url = await uploadImage(editLocationImageFile, 'locations')
+      if (url) locationImageUrl = url
+    }
+
+    // Ghi lại chi tiết thay đổi
+    const changes: string[] = []
+    const old = products.find(p => p.id === editingProduct.id)
+    if (old) {
+      if (old.weight !== editFormData.weight || (old.weightUnit || 'kg') !== editFormData.weightUnit) changes.push(`Khối lượng: ${old.weight}${old.weightUnit || 'kg'} → ${editFormData.weight}${editFormData.weightUnit}`)
+      if (old.name !== editFormData.name) changes.push(`Tên: ${old.name} → ${editFormData.name}`)
+      if (old.location !== editFormData.location) changes.push(`Vị trí: ${old.location} → ${editFormData.location}`)
+      if (old.locationImage !== locationImageUrl) changes.push('Ảnh vị trí: đã cập nhật')
+      if ((old.productImage || '') !== productImageUrl) changes.push('Ảnh sản phẩm: đã cập nhật')
+    }
+
+    // Cập nhật DB (giữ nguyên quantity)
+    const ok = await updateProduct(editingProduct.id, {
+      ...editFormData,
+      productImage: productImageUrl,
+      locationImage: locationImageUrl,
+      quantity: editingProduct.quantity, // Giữ nguyên số lượng
+    })
+
+    if (!ok) {
+      alert('❌ Cập nhật thất bại! Vui lòng thử lại.')
+      setIsEditSaving(false)
+      return
+    }
+
+    // Log lịch sử
+    await addHistoryEntry({
+      date: new Date().toLocaleDateString('vi-VN'),
+      time: new Date().toLocaleTimeString('vi-VN'),
+      warehouse: currentWarehouse?.name || '',
+      productCode: editFormData.code,
+      productName: editFormData.name,
+      userName: user?.name || user?.username || '',
+      action: 'Tồn kho',
+      quantity: editFormData.quantity,
+      details: changes.length > 0 ? changes.join(', ') : 'Không có thay đổi',
+    })
+
+    setIsEditSaving(false)
+    await loadProducts(selectedWarehouse)
+    setIsEditModalOpen(false)
+    alert('✅ Cập nhật sản phẩm thành công!')
+  }
+
+  // Xóa sản phẩm (soft delete) + ghi lịch sử
+  const handleDeleteProduct = async (product: Product) => {
+    if (confirm(`Bạn có chắc chắn muốn xóa "${product.name}" khỏi tồn kho?`)) {
+      await deleteProduct(product.id)
+      await addHistoryEntry({
+        date: new Date().toLocaleDateString('vi-VN'),
+        time: new Date().toLocaleTimeString('vi-VN'),
+        warehouse: currentWarehouse?.name || '',
+        productCode: product.code,
+        productName: product.name,
+        userName: user?.name || user?.username || '',
+        action: 'Xóa sản phẩm',
+        quantity: product.quantity,
+        details: `Xóa ${product.quantity} ${product.unit}`,
+      })
       await loadProducts(selectedWarehouse)
     }
   }
@@ -381,16 +593,14 @@ export default function WarehousePage() {
       return
     }
     setFormErrors({})
-    // Chặn trùng mã trên TOÀN hệ thống (chỉ khi thêm mới;
-    // khi sửa thì ô mã bị khóa nên bỏ qua, tránh tự chặn chính mình)
-    if (!editingProduct) {
-      const dup = await checkDuplicateGlobally(formData.code)
-      if (dup) {
-        alert('Mã hàng này đã tồn tại. Vui lòng kiểm tra lại')
-        return
-      }
+    // Chặn trùng mã trên TOÀN hệ thống (modal này chỉ để thêm mới;
+    // sửa sản phẩm dùng modal "Sửa Sản Phẩm Tồn Kho" riêng)
+    const dup = await checkDuplicateGlobally(formData.code)
+    if (dup) {
+      alert('Mã hàng này đã tồn tại. Vui lòng kiểm tra lại')
+      return
     }
-    // Chặn trùng tên trong cùng kho (thêm mới, hoặc sửa đổi sang tên SP khác)
+    // Chặn trùng tên trong cùng kho
     const nameDup = await checkDuplicateName(formData.name)
     if (nameDup) {
       alert('Tên hàng này đã tồn tại. Vui lòng kiểm tra lại!')
@@ -412,38 +622,51 @@ export default function WarehousePage() {
       if (url) locationImageUrl = url
     }
 
-    if (editingProduct) {
-      // Cập nhật sản phẩm
-      await updateProduct(editingProduct.id, {
-        ...formData,
-        productImage: productImageUrl,
-        locationImage: locationImageUrl,
-      })
-    } else {
-      // Thêm sản phẩm mới
-      await createProduct({
-        ...formData,
-        productImage: productImageUrl,
-        locationImage: locationImageUrl,
-        warehouseId: selectedWarehouse,
-      })
+    // Thêm sản phẩm mới
+    await createProduct({
+      ...formData,
+      productImage: productImageUrl,
+      locationImage: locationImageUrl,
+      warehouseId: selectedWarehouse,
+    })
 
-      // Log lịch sử nhập liệu
-      await addHistoryEntry({
-        date: new Date().toLocaleDateString('vi-VN'),
-        time: new Date().toLocaleTimeString('vi-VN'),
-        warehouse: currentWarehouse?.name || '',
-        productCode: formData.code,
-        productName: formData.name,
-        userName: user?.name || user?.username || '',
-        action: 'Nhập liệu',
-        quantity: Number(formData.quantity) || 0,
-        details: `Nhập ${formData.quantity} ${formData.unit}`,
-      })
-    }
+    // Log lịch sử nhập liệu
+    await addHistoryEntry({
+      date: new Date().toLocaleDateString('vi-VN'),
+      time: new Date().toLocaleTimeString('vi-VN'),
+      warehouse: currentWarehouse?.name || '',
+      productCode: formData.code,
+      productName: formData.name,
+      userName: user?.name || user?.username || '',
+      action: 'Nhập liệu',
+      quantity: Number(formData.quantity) || 0,
+      details: `Nhập ${formData.quantity} ${formData.unit}`,
+    })
     setIsSaving(false)
     setIsModalOpen(false)
     await loadProducts(selectedWarehouse)
+  }
+
+  // Xử lý upload ảnh sản phẩm (modal SỬA SẢN PHẨM TỒN KHO)
+  const handleEditProductImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      setEditProductImageFile(file)
+      const reader = new FileReader()
+      reader.onloadend = () => setEditFormData({ ...editFormData, productImage: reader.result as string })
+      reader.readAsDataURL(file)
+    }
+  }
+
+  // Xử lý upload ảnh vị trí (modal SỬA SẢN PHẨM TỒN KHO)
+  const handleEditLocationImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      setEditLocationImageFile(file)
+      const reader = new FileReader()
+      reader.onloadend = () => setEditFormData({ ...editFormData, locationImage: reader.result as string })
+      reader.readAsDataURL(file)
+    }
   }
 
   // Xử lý upload ảnh vị trí
@@ -583,6 +806,8 @@ export default function WarehousePage() {
                       <th className="text-right py-3 px-4 font-semibold text-gray-700">Số Lượng</th>
                       <th className="text-right py-3 px-4 font-semibold text-gray-700">Khối Lượng</th>
                       <th className="text-left py-3 px-4 font-semibold text-gray-700">Vị Trí</th>
+                      {canImport && <th className="text-center py-3 px-4 font-semibold text-gray-700">Thao tác</th>}
+                      {canImport && <th className="text-center py-3 px-4 font-semibold text-gray-700">Xóa</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -618,6 +843,16 @@ export default function WarehousePage() {
                               )}
                             </div>
                           </td>
+                          {canImport && (
+                            <td className="py-3 px-4 text-center">
+                              <Button variant="ghost" size="sm" onClick={() => handleEdit(item)} className="h-8 w-8 p-0 hover:bg-blue-100 text-blue-600" title="Sửa"><Edit2 className="h-4 w-4" /></Button>
+                            </td>
+                          )}
+                          {canImport && (
+                            <td className="py-3 px-4 text-center">
+                              <Button variant="ghost" size="sm" onClick={() => handleDeleteProduct(item)} className="h-8 w-8 p-0 hover:bg-red-100 text-red-600" title="Xóa"><Trash2 className="h-4 w-4" /></Button>
+                            </td>
+                          )}
                         </tr>
                       ))
                     )}
@@ -629,14 +864,14 @@ export default function WarehousePage() {
           )}
 
           {/* ============================================================ */}
-          {/* MODAL - Nhập Liệu Mới / Sửa Sản Phẩm                          */}
+          {/* MODAL - Nhập Liệu (chỉ thêm mới; sửa dùng modal riêng)        */}
           {/* ============================================================ */}
           {isModalOpen && modalType === 'import' && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
               <div className="bg-white rounded-2xl p-6 w-full max-w-4xl shadow-2xl max-h-[90vh] overflow-y-auto">
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-xl font-bold text-gray-800">
-                    {editingProduct ? 'Sửa Sản Phẩm' : 'Nhập Liệu'}
+                    Nhập Liệu
                   </h2>
                   <button onClick={() => { setIsModalOpen(false); setFormErrors({}) }} className="p-1 hover:bg-gray-100 rounded">
                     <X className="w-5 h-5 text-gray-500" />
@@ -651,7 +886,6 @@ export default function WarehousePage() {
                       value={formData.code}
                       onChange={(e) => { setFormData({ ...formData, code: e.target.value.toUpperCase() }); clearFieldError('code') }}
                       className={`border-2 ${duplicateInfo || formErrors.code ? 'border-red-500 bg-red-50 focus:ring-red-400' : ''}`}
-                      disabled={!!editingProduct}
                     />
                     {formErrors.code && (
                       <p className="text-red-600 text-xs mt-1 font-medium">⚠️ {formErrors.code}</p>
@@ -822,9 +1056,79 @@ export default function WarehousePage() {
                       disabled={isSaving || checkingCode || !!duplicateInfo || checkingName || duplicateName}
                     >
                       <Save className="w-4 h-4 mr-2" />
-                      {isSaving ? 'Đang lưu...' : (editingProduct ? 'Cập Nhật' : 'Nhập Liệu')}
+                      {isSaving ? 'Đang lưu...' : 'Nhập Liệu'}
                     </Button>
                   </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ============================================================ */}
+          {/* MODAL - SỬA SẢN PHẨM TỒN KHO (SỐ LƯỢNG KHÔNG CHO SỬA)         */}
+          {/* ============================================================ */}
+          {isEditModalOpen && editingProduct && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-2xl p-6 w-full max-w-4xl shadow-2xl max-h-[90vh] overflow-y-auto">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-xl font-bold text-gray-800">Sửa Sản Phẩm Tồn Kho</h2>
+                  <button onClick={() => setIsEditModalOpen(false)} className="p-1 hover:bg-gray-100 rounded-lg"><X className="w-5 h-5 text-gray-500" /></button>
+                </div>
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 text-sm text-amber-700">
+                  ⚠️ Lưu ý: Số lượng tồn kho KHÔNG được phép thay đổi tại đây.
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Mã hàng *</label><Input value={editFormData.code} onChange={(e) => { setEditFormData({...editFormData, code: e.target.value}); clearEditFieldError('code') }} className={`border-2 ${editDuplicateInfo || editFormErrors.code ? 'border-red-500 bg-red-50' : ''}`} />{editCheckingCode && !editDuplicateInfo && !editFormErrors.code && (<p className="text-gray-500 text-xs mt-1">Đang kiểm tra...</p>)}{editDuplicateInfo && (<p className="text-red-600 text-xs mt-1 font-medium">⚠️ Mã hàng này đã tồn tại (tại {editDuplicateInfo.warehouseName}). Vui lòng kiểm tra lại</p>)}{editFormErrors.code && (<p className="text-red-600 text-xs mt-1 font-medium">⚠️ {editFormErrors.code}</p>)}</div>
+                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Tên hàng *</label><Input value={editFormData.name} onChange={(e) => { setEditFormData({...editFormData, name: e.target.value}); clearEditFieldError('name') }} className={`border-2 ${editDuplicateName || editFormErrors.name ? 'border-red-500 bg-red-50' : ''}`} />{editCheckingName && !editDuplicateName && !editFormErrors.name && (<p className="text-gray-500 text-xs mt-1">Đang kiểm tra...</p>)}{editDuplicateName && (<p className="text-red-600 text-xs mt-1 font-medium">⚠️ Tên hàng này đã tồn tại trong kho này. Vui lòng kiểm tra lại</p>)}{editFormErrors.name && (<p className="text-red-600 text-xs mt-1 font-medium">⚠️ {editFormErrors.name}</p>)}</div>
+                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Đơn vị tính *</label><Input value={editFormData.unit} onChange={(e) => { setEditFormData({...editFormData, unit: e.target.value}); clearEditFieldError('unit') }} className={`border-2 ${editFormErrors.unit ? 'border-red-500 bg-red-50' : ''}`} />{editFormErrors.unit && (<p className="text-red-600 text-xs mt-1 font-medium">⚠️ {editFormErrors.unit}</p>)}</div>
+                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Số lượng (không thể sửa)</label><Input type="number" value={editFormData.quantity} className="border-2 bg-gray-100 cursor-not-allowed" disabled /></div>
+                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Khối lượng *</label>
+                    <div className="flex gap-2">
+                      <Input type="number" step="0.1" value={editFormData.weight} onChange={(e) => { setEditFormData({...editFormData, weight: Number(e.target.value)}); clearEditFieldError('weight') }} className={`border-2 flex-1 ${editFormErrors.weight ? 'border-red-500 bg-red-50' : ''}`} />
+                      <Input type="text" value={editFormData.weightUnit} onChange={(e) => { setEditFormData({...editFormData, weightUnit: e.target.value}); clearEditFieldError('weightUnit') }} className={`border-2 w-24 ${editFormErrors.weightUnit ? 'border-red-500 bg-red-50' : ''}`} placeholder="Đơn vị" />
+                    </div>
+                    {editFormErrors.weight && (<p className="text-red-600 text-xs mt-1 font-medium">⚠️ {editFormErrors.weight}</p>)}
+                    {editFormErrors.weightUnit && (<p className="text-red-600 text-xs mt-1 font-medium">⚠️ {editFormErrors.weightUnit}</p>)}
+                    <p className="text-xs text-gray-400 mt-1">VD: kg, g, lít, ml, chai...</p>
+                  </div>
+                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Vị trí *</label><Input value={editFormData.location} onChange={(e) => { setEditFormData({...editFormData, location: e.target.value}); clearEditFieldError('location') }} className={`border-2 ${editFormErrors.location ? 'border-red-500 bg-red-50' : ''}`} />{editFormErrors.location && (<p className="text-red-600 text-xs mt-1 font-medium">⚠️ {editFormErrors.location}</p>)}</div>
+                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Ngày nhập liệu *</label><Input type="date" value={editFormData.importDate} onChange={(e) => { setEditFormData({...editFormData, importDate: e.target.value}); clearEditFieldError('importDate') }} className={`border-2 ${editFormErrors.importDate ? 'border-red-500 bg-red-50' : ''}`} />{editFormErrors.importDate && (<p className="text-red-600 text-xs mt-1 font-medium">⚠️ {editFormErrors.importDate}</p>)}</div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">📷 Ảnh sản phẩm</label>
+                    <div className="flex gap-4 items-start">
+                      <label className="flex items-center gap-2 px-4 py-3 bg-blue-50 border-2 border-dashed border-blue-300 rounded-lg cursor-pointer hover:bg-blue-100 transition-colors flex-1">
+                        <Upload className="w-5 h-5 text-blue-500" /><span className="text-sm text-blue-600">Upload ảnh SP</span>
+                        <input type="file" accept="image/*" onChange={handleEditProductImageUpload} className="hidden" />
+                      </label>
+                      {editFormData.productImage && (
+                        <div className="relative">
+                          <img src={editFormData.productImage} alt="Ảnh SP" className="w-24 h-24 object-cover rounded-lg border-2 border-blue-200" />
+                          <button onClick={() => setEditFormData({...editFormData, productImage: ''})} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-600"><X className="w-4 h-4" /></button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">📍 Ảnh vị trí</label>
+                    <div className="flex gap-4 items-start">
+                      <label className="flex items-center gap-2 px-4 py-3 bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-200 transition-colors flex-1">
+                        <Upload className="w-5 h-5 text-gray-500" /><span className="text-sm text-gray-600">Upload ảnh vị trí</span>
+                        <input type="file" accept="image/*" onChange={handleEditLocationImageUpload} className="hidden" />
+                      </label>
+                      {editFormData.locationImage && (
+                        <div className="relative">
+                          <img src={editFormData.locationImage} alt="Ảnh vị trí" className="w-24 h-24 object-cover rounded-lg border-2" />
+                          <button onClick={() => setEditFormData({...editFormData, locationImage: ''})} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-600"><X className="w-4 h-4" /></button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex gap-3 mt-6">
+                  <Button variant="outline" onClick={() => setIsEditModalOpen(false)} className="flex-1">Hủy</Button>
+                  <Button onClick={handleSaveEdit} className="flex-1 bg-blue-600 hover:bg-blue-700" disabled={isEditSaving || editCheckingCode || editCheckingName || !!editDuplicateInfo || editDuplicateName}>
+                    <Save className="w-4 h-4 mr-2" /> {isEditSaving ? 'Đang cập nhật...' : 'Cập Nhật'}
+                  </Button>
                 </div>
               </div>
             </div>
