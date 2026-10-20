@@ -86,16 +86,18 @@ Shared shell via `components/sidebar.tsx`. All Supabase access via `lib/db.ts`.
     (`border-red-500 bg-red-50` + `⚠️ ... <p>`), block save before any DB call.
   - Messages identical to `docs/specs/inventory.md` (feature moved here verbatim).
   - Each input `onChange` clears its own error; `editFormErrors` reset on modal open.
-- Duplicate checks (run only after mandatory passes), unchanged from the inventory spec:
-  - Code: global across all 4 warehouses. Keep original value (`normalizeProductCode`
-    equal) -> allowed; changed -> `findProductByCode`, hit = duplicate warning naming the
-    warehouse (`warehouseNameById`).
+- Duplicate checks (run only after mandatory passes):
+  - Code: unique within `selectedWarehouse` only (same as Name). Same code in a different
+    warehouse is allowed. Keep original value (`normalizeProductCode` equal) -> allowed;
+    changed -> `findProductByCodeInWarehouse(code, selectedWarehouse)`, duplicate only when
+    `found && found.id !== editingProduct.id`. Warning
+    `Mã hàng này đã tồn tại trong kho này. Vui lòng kiểm tra lại`.
   - Name: unique within `selectedWarehouse` only. Keep original (`trim().toLowerCase()`
     equal) -> allowed; changed -> `findProductByNameInWarehouse`, duplicate only when
     `found && found.id !== editingProduct.id`.
   - 400ms debounce live-check + `editLatestCodeRef` / `editLatestNameRef` race guards;
     states reset on open. Save button disabled while
-    `isEditSaving || editCheckingCode || editCheckingName || editDuplicateInfo || editDuplicateName`.
+    `isEditSaving || editCheckingCode || editCheckingName || editDuplicateCode || editDuplicateName`.
 - Save: upload new images if files chosen (`uploadImage`), diff old vs new fields into a
   `changes[]` string, `updateProduct`, then `addHistoryEntry` with `action: 'Tồn kho'`,
   `details: changes.join(', ')` (or `Không có thay đổi`), then reload products.
@@ -112,11 +114,47 @@ Shared shell via `components/sidebar.tsx`. All Supabase access via `lib/db.ts`.
 - Delete never-rendered `handleEdit` / `handleDelete` (pre-edit versions) from warehouse.
 - `Nhập Liệu` modal becomes create-only: unconditional title `Nhập Liệu`, code input
   loses `disabled={!!editingProduct}`, `handleSave` drops the `updateProduct` branch and
-  the `if (!editingProduct)` skip around the global code check (always check on create),
+  the `if (!editingProduct)` skip around the code check (always check on create),
   `editingProduct` state (import-modal's) removed. Import/create duplicate checks,
   export, addmore, mandatory-8 validation, and history logging unchanged.
 - Files: `app/warehouse/page.tsx` (+ this spec). No changes to `lib/db.ts`,
   `lib/constants.ts`, `supabase/schema.sql`, sidebar, or history page.
+
+## Feature: "Mã hàng" unique per warehouse (not globally)
+- Rule: within one warehouse, two live (not soft-deleted) products may not share the same
+  `code` (case-insensitive, trimmed). The same code IS allowed in a different warehouse,
+  matching the existing "Tên hàng" rule. Applies to both modals in `app/warehouse/page.tsx`.
+- Data layer (`lib/db.ts`):
+  - Add `findProductByCodeInWarehouse(code, warehouseId): Promise<{ id } | null>` —
+    `ilike('code', normalizeProductCode(code))` exact match + `.eq('warehouse_id', ...)`
+    + `.eq('is_deleted', false)`, mirroring `findProductByNameInWarehouse`.
+  - Remove `findProductByCode` (global); both call sites now use the warehouse-scoped helper.
+- Create (`Nhập Liệu`) modal:
+  - Duplicate-code state becomes a boolean `duplicateCode` (mirrors `duplicateName`);
+    `warehouseNameById` is deleted (no remaining use).
+  - 400ms debounced live-check against `selectedWarehouse` with the same race guard pattern.
+  - Inline warning + `handleSave` alert:
+    `Mã hàng này đã tồn tại trong kho này. Vui lòng kiểm tra lại`.
+  - Save button keeps being disabled while `duplicateCode` is true.
+- Edit (`Sửa Sản Phẩm Tồn Kho`) modal: scoped to `selectedWarehouse`; duplicate only when
+  `found && found.id !== editingProduct.id`. Keep the unchanged-value early-out, debounce,
+  and race guard. Same message as create.
+- History page (`app/history/page.tsx`): the ĐVT lookup built from `getAllProducts()` is keyed
+  `${warehouse}|${code}` (warehouse display name from the history row) instead of `code`
+  alone, so repeated codes across warehouses resolve to their own unit when printing.
+- Enforcement is app-only (approved): no schema/DB change. Known ceiling: two concurrent
+  saves can still insert a duplicate. Add a partial unique index
+  `UNIQUE (warehouse_id, upper(trim(code))) WHERE is_deleted = false` if that risk matters.
+- Files: `app/warehouse/page.tsx`, `lib/db.ts`, `app/history/page.tsx` (+ this spec,
+  `docs/specs/history.md`). No changes to `lib/constants.ts`, `supabase/schema.sql`,
+  inventory page, or sidebar.
+- Manual checklist:
+  1. Create with a code that exists in the current warehouse -> red warning + blocked.
+  2. Create with the same code in a different warehouse -> allowed.
+  3. Edit keeping the product's own code -> allowed.
+  4. Edit to another product's code in the same warehouse -> red warning + blocked.
+  5. Edit to a code used only in a different warehouse -> allowed.
+  6. History print shows the correct ĐVT for rows sharing a code across warehouses.
 
 ## Feature: "Có Hình Ảnh" Column (always visible)
 - New read-only column `Có Hình Ảnh` in the product table of `app/warehouse/page.tsx`,

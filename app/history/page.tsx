@@ -50,10 +50,14 @@ export default function HistoryPage() {
     setUser(JSON.parse(userData))
     getHistoryLog().then(data => setHistoryLog(data))
     // Tải ĐVT sản phẩm để map khi in phiếu (MÃ KHO tra từ WAREHOUSE_CODES)
+    // Key = "tên kho|mã hàng" vì mã hàng chỉ duy nhất trong từng kho
     getAllProducts().then(grouped => {
       const map: Record<string, string> = {}
-      Object.values(grouped).flat().forEach(p => {
-        if (p.code) map[p.code.trim().toLowerCase()] = p.unit
+      Object.entries(grouped).forEach(([warehouseId, items]) => {
+        const warehouseName = WAREHOUSE_NAMES[warehouseId] || warehouseId
+        items.forEach(p => {
+          if (p.code) map[`${warehouseName}|${p.code.trim().toLowerCase()}`] = p.unit
+        })
       })
       setUnitMap(map)
     })
@@ -195,7 +199,7 @@ export default function HistoryPage() {
       wh: WAREHOUSE_CODES[entry.warehouse] ?? entry.warehouse,
       code: entry.productCode,
       name: entry.productName,
-      unit: unitMap[(entry.productCode || '').trim().toLowerCase()] || '—',
+      unit: unitMap[`${entry.warehouse}|${(entry.productCode || '').trim().toLowerCase()}`] || '—',
       qty: entry.quantity,
       note: entry.details || `${entry.action} ${entry.quantity} sản phẩm`,
     }))

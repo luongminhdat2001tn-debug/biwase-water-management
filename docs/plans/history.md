@@ -97,3 +97,14 @@
 - [ ] Step 3: Add a class (e.g. `print-zoom-reset`) to the zoom wrapper `div` and a print rule `transform: none !important` so non-100% preview zoom never shrinks print output or adds blank pages.
 - [ ] Step 4: Self-review diff (CSS-only, no JSX logic change except the wrapper className); run `npm run build`. Expected: builds clean.
 - [ ] Step 5: Manual test: few rows -> signatures at page bottom on screen and in print preview; many rows -> footer kept whole on last page; zoom at 150% then print -> output identical to 100%.
+
+---
+
+### Task 4: Unit map keyed by warehouse + code
+
+Spec: `docs/specs/history.md` (ÐVT row mapping). Needed because "Mã hàng" is now unique only
+within a warehouse (`docs/specs/warehouse.md`).
+
+- [ ] Step 1: In `app/history/page.tsx`, key `unitMap` by `` `${WAREHOUSE_NAMES[wid]}|${code.trim().toLowerCase()}` `` instead of code alone.
+- [ ] Step 2: Row mapping uses `` unitMap[`${entry.warehouse}|${(entry.productCode || '').trim().toLowerCase()}`] ``.
+- [ ] Step 3: `npm run build`; print rows sharing a code across warehouses and confirm each shows its own ÐVT.

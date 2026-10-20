@@ -124,20 +124,21 @@ export function normalizeProductCode(code: string): string {
   return (code || '').trim().toUpperCase()
 }
 
-/** Tìm sản phẩm theo mã trên TOÀN hệ thống (bỏ qua bản ghi đã xóa mềm) */
-export async function findProductByCode(code: string): Promise<{ warehouseId: string } | null> {
+/** Tìm sản phẩm theo mã trong MỘT kho (bỏ qua bản ghi đã xóa mềm) */
+export async function findProductByCodeInWarehouse(code: string, warehouseId: string): Promise<{ id: number } | null> {
   const normalized = normalizeProductCode(code)
-  if (!normalized) return null
+  if (!normalized || !warehouseId) return null
   // ilike (không wildcard) = so sánh chính xác, không phân biệt hoa/thường
   const { data, error } = await supabase
     .from('products')
-    .select('warehouse_id')
+    .select('id')
+    .eq('warehouse_id', warehouseId)
     .ilike('code', normalized)
     .eq('is_deleted', false)
     .limit(1)
     .maybeSingle()
   if (error || !data) return null
-  return { warehouseId: (data as any).warehouse_id as string }
+  return { id: (data as any).id as number }
 }
 
 /** Tìm sản phẩm theo tên trong MỘT kho (bỏ qua bản ghi đã xóa mềm) */

@@ -268,3 +268,52 @@ Only `app/warehouse/page.tsx` changes. No `lib/db.ts` / schema changes.
 ### Scope Guard
 - No changes to `lib/db.ts`, `lib/constants.ts`, schema, inventory page, history page, or the edit/import/export modals.
 - Checkbox stays `disabled` (display only, no state, no click handler). No new dependencies.
+
+## Plan: "M� h�ng" unique per warehouse (English)
+
+Goal: spec `docs/specs/warehouse.md` section "M� h�ng" unique per warehouse. App-only
+enforcement (approved): no schema change, no DB unique index.
+
+### Task 1: Warehouse-scoped code lookup in `lib/db.ts`
+
+**Files:** Modify `lib/db.ts`
+
+- [ ] **Step 1:** Replace `findProductByCode(code)` (lines ~127-141) with
+      `findProductByCodeInWarehouse(code: string, warehouseId: string): Promise<{ id: number } | null>`:
+      `.select('id').eq('warehouse_id', warehouseId).ilike('code', normalized).eq('is_deleted', false).limit(1).maybeSingle()`;
+      return `{ id: data.id }` or `null`. Mirror the existing `findProductByNameInWarehouse` comments.
+- [ ] **Step 2:** Confirm no other file imports `findProductByCode` (grep).
+
+### Task 2: Create + edit modals in `app/warehouse/page.tsx`
+
+**Files:** Modify `app/warehouse/page.tsx`
+
+- [ ] **Step 1:** Update the import from `@/lib/db`: `findProductByCode` -> `findProductByCodeInWarehouse`.
+- [ ] **Step 2:** Create-modal duplicate code state: replace `duplicateInfo` object with
+      `duplicateCode: boolean` (mirror `duplicateName`); rename `checkDuplicateGlobally` to
+      `checkDuplicateCodeInWarehouse`, query `findProductByCodeInWarehouse(normalized, selectedWarehouse)`,
+      return boolean; delete `warehouseNameById` (now unused). Reset state in `handleImport`,
+      clear on warehouse change.
+- [ ] **Step 3:** Replace messages: inline warning `M� h�ng n�y d� t?n t?i trong kho n�y. Vui l�ng ki?m tra l?i`
+      and `handleSave` alert same text; save button disabled condition uses `duplicateCode`.
+- [ ] **Step 4:** Edit modal: `checkEditDuplicateCode` queries
+      `findProductByCodeInWarehouse(normalized, selectedWarehouse)`, duplicate only when
+      `found && found.id !== editingProduct.id`; drop `editDuplicateInfo` object in favor of
+      boolean `editDuplicateCode` (same pattern as `editDuplicateName`); update the JSX warning.
+- [ ] **Step 5:** Vietnamese comments on both check helpers (`// M� h�ng ch? c?n duy nh?t trong kho hi?n t?i`).
+
+### Task 3: History unit lookup key
+
+**Files:** Modify `app/history/page.tsx`
+
+- [ ] **Step 1:** In the `getAllProducts()` effect, key the map by
+      `` `${WAREHOUSE_NAMES[wid]}|${code.trim().toLowerCase()}` `` (warehouse display name,
+      matching `HistoryEntry.warehouse`).
+- [ ] **Step 2:** At the row-mapping line (~198), look up
+      `unitMap[`${entry.warehouse}|${(entry.productCode || '').trim().toLowerCase()}`]`.
+
+### Task 4: Verify
+
+- [ ] **Step 1:** `npm run build` clean; self-review the diff for type slips (build ignores TS).
+- [ ] **Step 2:** Manual checklist in the spec section (same code in another warehouse allowed,
+      duplicates in the same warehouse blocked, own code on edit allowed, print �VT correct).
