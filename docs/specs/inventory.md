@@ -76,3 +76,51 @@ Shared shell via `components/sidebar.tsx`. All Supabase access via `lib/db.ts`.
 11. `Xem` on a product -> `Khối lượng` reads `5 - kg` (dash + spaces). On a product
     saved with the warehouse `Chưa rõ` checkbox -> `0 - Chưa rõ`.
 12. `npm run build` passes.
+
+## Feature: Group table by Danh mục (empty categories collapsed)
+- Parent table replaces the flat product table for the selected warehouse. Columns:
+  `STT | Tên Danh Mục | Tổng Số Lượng` (3 columns).
+- Grouping: from `filteredItems` (existing search filter, unchanged predicate on product
+  name/code), group by `categoryName` trimmed; empty/whitespace falls back to
+  `Chưa phân loại` (legacy rows created before the category field existed).
+  Category order: `localeCompare('vi')` ascending. Product order inside a group: the
+  existing order from `getAllProducts()` (name ascending).
+- `Tổng Số Lượng`: plain `sum(quantity)` of the group, rendered right-aligned with
+  `toLocaleString()`. Accepted ceiling: quantities of different units are summed as
+  numbers, no unit shown on the parent row.
+- Expand/collapse (accordion): single-open state `openCategory: string | null`.
+  Name cell renders a `<button>` with `ChevronRight` (closed) / `ChevronDown` (open) +
+  the category name. Clicking an open category closes it; clicking another one closes
+  the previous.
+- Search interaction: when `searchTerm` is non-empty, only categories that contain a
+  matching product are rendered, and ALL of them render expanded (auto-open), ignoring
+  `openCategory` until the search is cleared. Groups with no match are hidden.
+- Subtable (rendered in a `<tr><td colSpan={3}>` directly under its category row, nested
+  `<table>`): `STT | Mã Hàng | Tên Hàng | Số Lượng | Có Hình Ảnh | Thông Tin`, cells
+  identical to the current table (`quantity + unit`, disabled `Checkbox` for
+  `productImage`, `Xem` button opening the existing detail modal). `STT` restarts at 1
+  in each category.
+- Empty state: no products at all -> single row `colSpan={3}` with the existing
+  `Không có sản phẩm tồn kho` message.
+- Removed: the `Xóa` column and its permission gate (`canEditInventory`,
+  `deleteProduct` / `addHistoryEntry` imports, `Trash2`). Deleting a product stays
+  available on the Quản Lý Kho page (`nhap-lieu` / admin).
+- Unchanged: warehouse tabs + product counts, search input, `loadAllProducts`,
+  `Xem` detail modal (no `Danh mục` row added).
+- Files: `app/inventory/page.tsx` (+ this spec). No `lib/db.ts`, `lib/constants.ts`,
+  schema, or warehouse-page change.
+
+## Manual Test Checklist (grouped table)
+13. Tồn Kho -> a warehouse with products in several categories: parent rows are unique
+    category names sorted A→Z, each total equals the sum of its products' quantities.
+14. Click a category -> subtable appears with STT restarting at 1 and the 6 columns
+    (`Mã Hàng`, `Tên Hàng`, `Số Lượng`, `Có Hình Ảnh`, `Thông Tin`); click again -> closes.
+15. Click category A then B -> A closes, B opens (accordion).
+16. Type a product name/code -> only matching categories remain and are already expanded;
+    clear search -> back to accordion with `openCategory` state.
+17. Product created before categories existed (`category_name` empty) -> grouped under
+    `Chưa phân loại`.
+18. `Xóa` column gone for both `ton-kho` and admin users; warehouse page still deletes.
+19. `Xem` opens the same detail modal as before.
+20. Warehouse with zero products -> empty state spans the full parent width.
+21. `npm run build` passes.

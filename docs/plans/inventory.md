@@ -162,3 +162,43 @@ Only `app/inventory/page.tsx` changes. No `lib/db.ts` / schema changes.
 ### Scope Guard
 - No fallback added here — `lib/db.ts`'s `weightUnit: row.weight_unit || 'kg'` already guarantees a non-empty unit.
 - No changes to the table columns, delete gate, search, tabs, or history logging.
+
+## Plan: Group Tồn Kho table by Danh mục (English)
+
+Goal: spec `docs/specs/inventory.md` section "Group table by Danh mục". Only
+`app/inventory/page.tsx` changes. No `lib/*`, schema, or warehouse-page change.
+
+Reference lines: imports 10-12; `canEditInventory` 29-35; `currentItems`/`filteredItems` 37-42;
+table Card 82-137; empty-row `colSpan` 116.
+
+### Task 1: Grouping + accordion state
+
+**Files:** Modify `app/inventory/page.tsx`
+
+- [ ] **Step 1:** Imports: add `ChevronDown, ChevronRight` and `Fragment` (`import { Fragment, useEffect, useState } from 'react'`); drop `Trash2` from `lucide-react` and drop `deleteProduct, addHistoryEntry` from the `@/lib/db` import.
+- [ ] **Step 2:** Delete `canEditInventory` and `hasEditPermission` (unused after the `Xóa` column is gone).
+- [ ] **Step 3:** Add state `const [openCategory, setOpenCategory] = useState<string | null>(null)`; reset it to `null` when the warehouse changes (in the tab `onClick`, next to `setSelectedWarehouse`).
+- [ ] **Step 4:** After `filteredItems`, derive `const isSearching = searchTerm.trim() !== ''` and group:
+      `const categoryGroups = (() => { const map = new Map<string, { name: string; total: number; items: Product[] }>(); for (const item of filteredItems) { const key = (item.categoryName || '').trim() || 'Chưa phân loại'; const group = map.get(key) || { name: key, total: 0, items: [] }; group.total += item.quantity; group.items.push(item); map.set(key, group) } return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, 'vi')) })()`.
+      Vietnamese comment: `// Gom sản phẩm theo danh mục; danh mục trống (dữ liệu cũ) -> "Chưa phân loại"`.
+
+### Task 2: Parent table + nested subtable
+
+**Files:** Modify `app/inventory/page.tsx`
+
+- [ ] **Step 1:** Replace the existing `<thead>`: 3 columns `STT` (center, `w-16`), `Tên Danh Mục` (left), `Tổng Số Lượng` (right).
+- [ ] **Step 2:** Replace the `<tbody>` body: empty state -> one row `colSpan={3}` keeping the current `Archive` icon + `Không có sản phẩm tồn kho`; otherwise map `categoryGroups` and return a `Fragment key={group.name}` containing:
+      the parent row (`STT` = `index + 1`, name cell = `<button>` with `ChevronRight` when closed / `ChevronDown` when open + `group.name`, total cell = `group.total.toLocaleString()` right-aligned), then
+      `{isOpen && (<tr><td colSpan={3} className="p-0"><div className="bg-gray-50 p-4"><table className="w-full text-sm"><thead>STT, Mã Hàng, Tên Hàng, Số Lượng, Có Hình Ảnh, Thông Tin</thead><tbody>{group.items.map((item, i) => ... )}</tbody></table></div></td></tr>)}`.
+      Subtable cells are copied verbatim from today's row body (code, name, `quantity + unit`, disabled `Checkbox`, `Xem` button calling `handleViewDetail(item)`), with `STT` = `i + 1`.
+- [ ] **Step 3:** `const isOpen = isSearching || openCategory === group.name`; button `onClick={() => setOpenCategory(prev => prev === group.name ? null : group.name)}` (during search the visual stays open; the click only updates the remembered accordion state).
+- [ ] **Step 4:** Update the table comment above the Card to describe the grouped layout.
+
+### Task 3: Verify
+
+- [ ] **Step 1:** `npx tsc --noEmit` clean, then `npm run build` clean.
+- [ ] **Step 2:** Manual checklist items 13-21 in `docs/specs/inventory.md`.
+
+### Scope Guard
+- No `lib/db.ts` / `lib/constants.ts` / schema change; no `Danh mục` row in the detail modal; no unit shown on `Tổng Số Lượng`.
+- Search predicate and warehouse tabs unchanged; `Xem` modal unchanged.

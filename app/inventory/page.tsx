@@ -1,14 +1,14 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { Sidebar } from '@/components/sidebar'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Archive, Factory, Building, ShoppingBag, FlaskConical, Search, Eye, X, Trash2 } from 'lucide-react'
+import { Archive, Factory, Building, ShoppingBag, FlaskConical, Search, Eye, X, ChevronDown, ChevronRight } from 'lucide-react'
 import { type Product } from '@/lib/constants'
-import { getAllProducts, deleteProduct, addHistoryEntry } from '@/lib/db'
+import { getAllProducts } from '@/lib/db'
 
 const WAREHOUSES = [
   { id: 'kho-vat-tu', name: 'Kho Vật Tư Nhà Máy', icon: Factory, color: 'blue' },
@@ -24,6 +24,8 @@ export default function InventoryPage() {
   const [allProducts, setAllProducts] = useState<Record<string, Product[]>>({})
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
+  // Danh mục đang mở (accordion - chỉ 1 danh mục mở tại một thời điểm)
+  const [openCategory, setOpenCategory] = useState<string | null>(null)
 
   const loadAllProducts = async () => {
     const data = await getAllProducts()
@@ -37,19 +39,25 @@ export default function InventoryPage() {
     loadAllProducts()
   }, [])
 
-  // Quyền xóa sản phẩm tồn kho (sửa sản phẩm đã chuyển sang trang Quản Lý Kho)
-  const canEditInventory = () => {
-    if (!user) return false
-    const perms = Array.isArray(user.chucNang) ? user.chucNang : [user.chucNang || '']
-    return perms.includes('ton-kho') || perms.includes('them-tai-khoan') || user.isAdmin
-  }
-
   const currentItems = allProducts[selectedWarehouse] || []
   const filteredItems = currentItems.filter(
     (item) => item.name.toLowerCase().includes(searchTerm.toLowerCase()) || item.code.toLowerCase().includes(searchTerm.toLowerCase())
   )
   const currentWarehouse = WAREHOUSES.find(w => w.id === selectedWarehouse)
-  const hasEditPermission = canEditInventory()
+  // Đang tìm kiếm -> tự mở tất cả danh mục có kết quả
+  const isSearching = searchTerm.trim() !== ''
+  // Gom sản phẩm theo danh mục; danh mục trống (dữ liệu cũ) -> "Chưa phân loại"
+  const categoryGroups = (() => {
+    const map = new Map<string, { name: string; total: number; items: Product[] }>()
+    for (const item of filteredItems) {
+      const key = (item.categoryName || '').trim() || 'Chưa phân loại'
+      const group = map.get(key) || { name: key, total: 0, items: [] }
+      group.total += item.quantity
+      group.items.push(item)
+      map.set(key, group)
+    }
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, 'vi'))
+  })()
 
   const handleViewDetail = (product: Product) => { setSelectedProduct(product); setIsDetailModalOpen(true) }
 
@@ -74,7 +82,7 @@ export default function InventoryPage() {
                 green: isSelected ? 'bg-green-600 text-white border-green-700' : 'bg-white text-green-600 border-green-200 hover:border-green-400',
               }
               return (
-                <button key={warehouse.id} onClick={() => setSelectedWarehouse(warehouse.id)} className={`p-4 rounded-xl border-2 transition-all flex items-center gap-3 ${colorClasses[warehouse.color]}`}>
+                <button key={warehouse.id} onClick={() => { setSelectedWarehouse(warehouse.id); setOpenCategory(null) }} className={`p-4 rounded-xl border-2 transition-all flex items-center gap-3 ${colorClasses[warehouse.color]}`}>
                   <Icon className="w-8 h-8" />
                   <div className="text-left">
                     <p className="font-semibold">{warehouse.name}</p>
@@ -85,7 +93,8 @@ export default function InventoryPage() {
             })}
           </div>
 
-          {/* Product Table - STT, Mã hàng, Tên hàng, Số lượng, Có hình ảnh, Thông tin */}
+          {/* Bảng nhóm theo danh mục: STT, Tên Danh Mục, Tổng Số Lượng.
+              Bấm tên danh mục để mở/đóng bảng con (accordion - 1 danh mục mở). */}
           <Card className={`border-l-4 ${
             currentWarehouse?.color === 'blue' ? 'border-l-blue-600' :
             currentWarehouse?.color === 'orange' ? 'border-l-orange-500' :
@@ -110,31 +119,72 @@ export default function InventoryPage() {
                   <thead>
                     <tr className="bg-gray-100">
                       <th className="text-center py-3 px-4 font-semibold text-gray-700 w-16">STT</th>
-                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Mã Hàng</th>
-                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Tên Hàng</th>
-                      <th className="text-right py-3 px-4 font-semibold text-gray-700">Số Lượng</th>
-                      <th className="text-center py-3 px-4 font-semibold text-gray-700">Có Hình Ảnh</th>
-                      <th className="text-center py-3 px-4 font-semibold text-gray-700">Thông tin</th>
+                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Tên Danh Mục</th>
+                      <th className="text-right py-3 px-4 font-semibold text-gray-700">Tổng Số Lượng</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredItems.length === 0 ? (
-                      <tr><td colSpan={hasEditPermission ? 7 : 6} className="text-center py-8 text-gray-500"><Archive className="w-16 h-16 mx-auto mb-2 text-gray-300" /><p>Không có sản phẩm tồn kho</p></td></tr>
+                    {categoryGroups.length === 0 ? (
+                      <tr><td colSpan={3} className="text-center py-8 text-gray-500"><Archive className="w-16 h-16 mx-auto mb-2 text-gray-300" /><p>Không có sản phẩm tồn kho</p></td></tr>
                     ) : (
-                      filteredItems.map((item, index) => (
-                        <tr key={item.id} className="border-b hover:bg-gray-50">
-                          <td className="py-3 px-4 text-center text-gray-600">{index + 1}</td>
-                          <td className="py-3 px-4"><span className="font-mono font-medium text-blue-600">{item.code}</span></td>
-                          <td className="py-3 px-4"><p className="font-medium text-gray-800">{item.name}</p></td>
-                          <td className="py-3 px-4 text-right font-medium text-gray-800">{item.quantity.toLocaleString()} {item.unit}</td>
-                          <td className="py-3 px-4 text-center">
-                            <Checkbox checked={!!item.productImage} disabled />
-                          </td>
-                          <td className="py-3 px-4 text-center">
-                            <Button variant="ghost" size="sm" onClick={() => handleViewDetail(item)} className="hover:bg-blue-100 text-blue-600"><Eye className="h-4 w-4 mr-1" /> Xem</Button>
-                          </td>
-                        </tr>
-                      ))
+                      categoryGroups.map((group, index) => {
+                        // Khi đang tìm kiếm, mọi danh mục có kết quả đều mở sẵn
+                        const isOpen = isSearching || openCategory === group.name
+                        return (
+                          <Fragment key={group.name}>
+                            <tr className="border-b hover:bg-gray-50">
+                              <td className="py-3 px-4 text-center text-gray-600">{index + 1}</td>
+                              <td className="py-3 px-4">
+                                <button
+                                  onClick={() => setOpenCategory(prev => prev === group.name ? null : group.name)}
+                                  className="flex items-center gap-2 font-medium text-gray-800 hover:text-blue-600"
+                                  title={isOpen ? 'Thu gọn' : 'Mở rộng'}
+                                >
+                                  {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                                  {group.name}
+                                </button>
+                              </td>
+                              <td className="py-3 px-4 text-right font-medium text-gray-800">{group.total.toLocaleString()}</td>
+                            </tr>
+                            {isOpen && (
+                              <tr>
+                                <td colSpan={3} className="p-0">
+                                  <div className="bg-gray-50 p-4">
+                                    <table className="w-full text-sm">
+                                      <thead>
+                                        <tr className="bg-gray-200">
+                                          <th className="text-center py-2 px-4 font-semibold text-gray-700 w-16">STT</th>
+                                          <th className="text-left py-2 px-4 font-semibold text-gray-700">Mã Hàng</th>
+                                          <th className="text-left py-2 px-4 font-semibold text-gray-700">Tên Hàng</th>
+                                          <th className="text-right py-2 px-4 font-semibold text-gray-700">Số Lượng</th>
+                                          <th className="text-center py-2 px-4 font-semibold text-gray-700">Có Hình Ảnh</th>
+                                          <th className="text-center py-2 px-4 font-semibold text-gray-700">Thông Tin</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {group.items.map((item, i) => (
+                                          <tr key={item.id} className="border-b border-gray-200 hover:bg-white">
+                                            <td className="py-3 px-4 text-center text-gray-600">{i + 1}</td>
+                                            <td className="py-3 px-4"><span className="font-mono font-medium text-blue-600">{item.code}</span></td>
+                                            <td className="py-3 px-4"><p className="font-medium text-gray-800">{item.name}</p></td>
+                                            <td className="py-3 px-4 text-right font-medium text-gray-800">{item.quantity.toLocaleString()} {item.unit}</td>
+                                            <td className="py-3 px-4 text-center">
+                                              <Checkbox checked={!!item.productImage} disabled />
+                                            </td>
+                                            <td className="py-3 px-4 text-center">
+                                              <Button variant="ghost" size="sm" onClick={() => handleViewDetail(item)} className="hover:bg-blue-100 text-blue-600"><Eye className="h-4 w-4 mr-1" /> Xem</Button>
+                                            </td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </Fragment>
+                        )
+                      })
                     )}
                   </tbody>
                 </table>
