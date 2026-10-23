@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS products (
   location_image_url TEXT,
   product_image_url TEXT,
   import_date DATE,
+  category_name VARCHAR(200) NOT NULL,
   is_deleted BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );

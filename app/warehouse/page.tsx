@@ -42,6 +42,7 @@ export default function WarehousePage() {
   const [formData, setFormData] = useState({
     code: '',
     name: '',
+    categoryName: '',
     unit: '',
     quantity: '' as any,
     weight: '' as any,
@@ -55,7 +56,7 @@ export default function WarehousePage() {
   // Lỗi đỏ cho các trường bắt buộc trong form Nhập liệu
   // (hiện sau khi bấm Lưu, tự xóa từng ô khi user sửa lại)
   const [formErrors, setFormErrors] = useState<{
-    code?: string; name?: string; unit?: string; quantity?: string
+    code?: string; name?: string; categoryName?: string; unit?: string; quantity?: string
     weight?: string; weightUnit?: string; location?: string; importDate?: string
   }>({})
 
@@ -90,6 +91,7 @@ export default function WarehousePage() {
     const errors: typeof formErrors = {}
     if (!String(formData.code || '').trim()) errors.code = 'Vui lòng nhập mã hàng'
     if (!String(formData.name || '').trim()) errors.name = 'Vui lòng nhập tên hàng'
+    if (!String(formData.categoryName || '').trim()) errors.categoryName = 'Vui lòng nhập danh mục'
     if (!String(formData.unit || '').trim()) errors.unit = 'Vui lòng nhập đơn vị tính'
     if (formData.quantity === '' || formData.quantity === null || formData.quantity === undefined || Number(formData.quantity) <= 0) errors.quantity = 'Vui lòng nhập số lượng lớn hơn 0'
     if (!weightUnknown) {
@@ -196,7 +198,7 @@ export default function WarehousePage() {
   // ------------------------------------------
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [editFormData, setEditFormData] = useState({
-    code: '', name: '', unit: '', quantity: 0, weight: 0, weightUnit: 'kg', location: '', locationImage: '', productImage: '', importDate: ''
+    code: '', name: '', categoryName: '', unit: '', quantity: 0, weight: 0, weightUnit: 'kg', location: '', locationImage: '', productImage: '', importDate: ''
   })
   const [editProductImageFile, setEditProductImageFile] = useState<File | null>(null)
   const [editLocationImageFile, setEditLocationImageFile] = useState<File | null>(null)
@@ -205,7 +207,7 @@ export default function WarehousePage() {
   // Lỗi đỏ cho 7 trường bắt buộc trong form Sửa tồn kho
   // (hiện sau khi bấm Cập Nhật, tự xóa từng ô khi user sửa lại)
   const [editFormErrors, setEditFormErrors] = useState<{
-    code?: string; name?: string; unit?: string
+    code?: string; name?: string; categoryName?: string; unit?: string
     weight?: string; weightUnit?: string; location?: string; importDate?: string
   }>({})
 
@@ -240,6 +242,7 @@ export default function WarehousePage() {
     const errors: typeof editFormErrors = {}
     if (!String(editFormData.code || '').trim()) errors.code = 'Vui lòng nhập mã hàng'
     if (!String(editFormData.name || '').trim()) errors.name = 'Vui lòng nhập tên hàng'
+    if (!String(editFormData.categoryName || '').trim()) errors.categoryName = 'Vui lòng nhập danh mục'
     if (!String(editFormData.unit || '').trim()) errors.unit = 'Vui lòng nhập đơn vị tính'
     if (!editWeightUnknown) {
       if (!editFormData.weight || Number(editFormData.weight) <= 0) errors.weight = 'Vui lòng nhập khối lượng lớn hơn 0'
@@ -374,7 +377,7 @@ export default function WarehousePage() {
     setIsSaving(false)
     setFormErrors({})
     setWeightUnknown(false)
-    setFormData({ code: '', name: '', unit: '', quantity: '', weight: '', weightUnit: 'kg', location: '', locationImage: '', productImage: '', importDate: new Date().toISOString().split('T')[0] })
+    setFormData({ code: '', name: '', categoryName: '', unit: '', quantity: '', weight: '', weightUnit: 'kg', location: '', locationImage: '', productImage: '', importDate: new Date().toISOString().split('T')[0] })
     setProductImageFile(null)
     setLocationImageFile(null)
     setIsModalOpen(true)
@@ -500,6 +503,7 @@ export default function WarehousePage() {
     setEditFormData({
       code: product.code,
       name: product.name,
+      categoryName: product.categoryName,
       unit: product.unit,
       quantity: product.quantity,
       weight: unknown ? 0 : product.weight,
@@ -569,6 +573,7 @@ export default function WarehousePage() {
     if (old) {
       if (old.weight !== editFormData.weight || (old.weightUnit || 'kg') !== editFormData.weightUnit) changes.push(`Khối lượng: ${old.weight} - ${old.weightUnit || 'kg'} → ${editFormData.weight} - ${editFormData.weightUnit}`)
       if (old.name !== editFormData.name) changes.push(`Tên: ${old.name} → ${editFormData.name}`)
+      if (old.categoryName !== editFormData.categoryName) changes.push(`Danh mục: ${old.categoryName} → ${editFormData.categoryName}`)
       if (old.location !== editFormData.location) changes.push(`Vị trí: ${old.location} → ${editFormData.location}`)
       if (old.locationImage !== locationImageUrl) changes.push('Ảnh vị trí: đã cập nhật')
       if ((old.productImage || '') !== productImageUrl) changes.push('Ảnh sản phẩm: đã cập nhật')
@@ -788,125 +793,123 @@ export default function WarehousePage() {
               </CardContent>
             </Card>
           ) : (
-          <Card className={`border-l-4 ${
-              currentWarehouse?.color === 'blue' ? 'border-l-blue-600' :
+            <Card className={`border-l-4 ${currentWarehouse?.color === 'blue' ? 'border-l-blue-600' :
               currentWarehouse?.color === 'orange' ? 'border-l-orange-500' :
-              currentWarehouse?.color === 'purple' ? 'border-l-purple-600' : 'border-l-green-600'
-            }`}>
-            <CardHeader>
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <CardTitle className={`flex items-center gap-2 ${
-                  currentWarehouse?.color === 'blue' ? 'text-blue-600' :
-                  currentWarehouse?.color === 'orange' ? 'text-orange-500' :
-                  currentWarehouse?.color === 'purple' ? 'text-purple-600' : 'text-green-600'
-                }`}>
-                  {currentWarehouse && <currentWarehouse.icon className="w-5 h-5" />}
-                  {currentWarehouse?.name}
-                </CardTitle>
-                <div className="flex gap-2 flex-wrap">
-                  {canImport && (
-                    <Button onClick={handleImport} className="bg-green-600 text-white hover:bg-green-700">
-                      <LogIn className="h-4 w-4 mr-2" />
-                      Nhập Liệu
-                    </Button>
-                  )}
-                  {canImport && (
-                    <Button onClick={handleAddMore} className="bg-blue-600 text-white hover:bg-blue-700">
-                      <RefreshCw className="h-4 w-4 mr-2" />
-                      Nhập Kho
-                    </Button>
-                  )}
-                  {canExport && (
-                    <Button onClick={handleExport} className="bg-orange-500 text-white hover:bg-orange-600">
-                      <LogOut className="h-4 w-4 mr-2" />
-                      Xuất Kho
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="p-6">
-              {/* Search */}
-              <div className="relative mb-4">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <Input
-                  placeholder="Tìm kiếm theo mã hàng hoặc tên hàng..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 border-2 border-gray-200"
-                />
-              </div>
-
-              {/* Table */}
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-gray-100">
-                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Mã Hàng</th>
-                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Tên Hàng</th>
-                      <th className="text-left py-3 px-4 font-semibold text-gray-700">ĐVT</th>
-                      <th className="text-right py-3 px-4 font-semibold text-gray-700">Số Lượng</th>
-                      <th className="text-right py-3 px-4 font-semibold text-gray-700">Khối Lượng</th>
-                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Vị Trí</th>
-                      <th className="text-center py-3 px-4 font-semibold text-gray-700">Có Hình Ảnh</th>
-                      {canImport && <th className="text-center py-3 px-4 font-semibold text-gray-700">Thao tác</th>}
-                      {canImport && <th className="text-center py-3 px-4 font-semibold text-gray-700">Xóa</th>}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {loading ? (
-                      <tr><td colSpan={canImport ? 9 : 7} className="text-center py-8 text-gray-500">Đang tải...</td></tr>
-                    ) : filteredItems.length === 0 ? (
-                      <tr>
-                        <td colSpan={canImport ? 9 : 7} className="text-center py-8 text-gray-500">
-                          Không có sản phẩm nào
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredItems.map((item) => (
-                        <tr key={item.id} className="border-b hover:bg-gray-50">
-                          <td className="py-3 px-4">
-                            <span className="font-mono font-medium text-blue-600">{item.code}</span>
-                          </td>
-                          <td className="py-3 px-4">
-                            <p className="font-medium text-gray-800">{item.name}</p>
-                          </td>
-                          <td className="py-3 px-4 text-gray-600">{item.unit}</td>
-                          <td className="py-3 px-4 text-right font-medium text-gray-800">
-                            {item.quantity.toLocaleString()}
-                          </td>
-                          <td className="py-3 px-4 text-right text-gray-600">
-                            {item.weight} - {item.weightUnit || 'kg'}
-                          </td>
-                          <td className="py-3 px-4">
-                            <div className="flex items-center gap-2">
-                              <span className="text-gray-600">{item.location}</span>
-                              {item.locationImage && (
-                                <img src={item.locationImage} alt="Vị trí" className="w-8 h-8 object-cover rounded" />
-                              )}
-                            </div>
-                          </td>
-                          <td className="py-3 px-4 text-center">
-                            <Checkbox checked={!!item.productImage} disabled />
-                          </td>
-                          {canImport && (
-                            <td className="py-3 px-4 text-center">
-                              <Button variant="ghost" size="sm" onClick={() => handleEdit(item)} className="h-8 w-8 p-0 hover:bg-blue-100 text-blue-600" title="Sửa"><Edit2 className="h-4 w-4" /></Button>
-                            </td>
-                          )}
-                          {canImport && (
-                            <td className="py-3 px-4 text-center">
-                              <Button variant="ghost" size="sm" onClick={() => handleDeleteProduct(item)} className="h-8 w-8 p-0 hover:bg-red-100 text-red-600" title="Xóa"><Trash2 className="h-4 w-4" /></Button>
-                            </td>
-                          )}
-                        </tr>
-                      ))
+                currentWarehouse?.color === 'purple' ? 'border-l-purple-600' : 'border-l-green-600'
+              }`}>
+              <CardHeader>
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <CardTitle className={`flex items-center gap-2 ${currentWarehouse?.color === 'blue' ? 'text-blue-600' :
+                    currentWarehouse?.color === 'orange' ? 'text-orange-500' :
+                      currentWarehouse?.color === 'purple' ? 'text-purple-600' : 'text-green-600'
+                    }`}>
+                    {currentWarehouse && <currentWarehouse.icon className="w-5 h-5" />}
+                    {currentWarehouse?.name}
+                  </CardTitle>
+                  <div className="flex gap-2 flex-wrap">
+                    {canImport && (
+                      <Button onClick={handleImport} className="bg-green-600 text-white hover:bg-green-700">
+                        <LogIn className="h-4 w-4 mr-2" />
+                        Nhập Liệu
+                      </Button>
                     )}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
+                    {canImport && (
+                      <Button onClick={handleAddMore} className="bg-blue-600 text-white hover:bg-blue-700">
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Nhập Kho
+                      </Button>
+                    )}
+                    {canExport && (
+                      <Button onClick={handleExport} className="bg-orange-500 text-white hover:bg-orange-600">
+                        <LogOut className="h-4 w-4 mr-2" />
+                        Xuất Kho
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="p-6">
+                {/* Search */}
+                <div className="relative mb-4">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <Input
+                    placeholder="Tìm kiếm theo mã hàng hoặc tên hàng..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10 border-2 border-gray-200"
+                  />
+                </div>
+
+                {/* Table */}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-gray-100">
+                        <th className="text-left py-3 px-4 font-semibold text-gray-700">Mã Hàng</th>
+                        <th className="text-left py-3 px-4 font-semibold text-gray-700">Tên Hàng</th>
+                        <th className="text-left py-3 px-4 font-semibold text-gray-700">ĐVT</th>
+                        <th className="text-right py-3 px-4 font-semibold text-gray-700">Số Lượng</th>
+                        <th className="text-right py-3 px-4 font-semibold text-gray-700">Khối Lượng</th>
+                        <th className="text-left py-3 px-4 font-semibold text-gray-700">Vị Trí</th>
+                        <th className="text-center py-3 px-4 font-semibold text-gray-700">Có Hình Ảnh</th>
+                        {canImport && <th className="text-center py-3 px-4 font-semibold text-gray-700">Thao tác</th>}
+                        {canImport && <th className="text-center py-3 px-4 font-semibold text-gray-700">Xóa</th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {loading ? (
+                        <tr><td colSpan={canImport ? 9 : 7} className="text-center py-8 text-gray-500">Đang tải...</td></tr>
+                      ) : filteredItems.length === 0 ? (
+                        <tr>
+                          <td colSpan={canImport ? 9 : 7} className="text-center py-8 text-gray-500">
+                            Không có sản phẩm nào
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredItems.map((item) => (
+                          <tr key={item.id} className="border-b hover:bg-gray-50">
+                            <td className="py-3 px-4">
+                              <span className="font-mono font-medium text-blue-600">{item.code}</span>
+                            </td>
+                            <td className="py-3 px-4">
+                              <p className="font-medium text-gray-800">{item.name}</p>
+                            </td>
+                            <td className="py-3 px-4 text-gray-600">{item.unit}</td>
+                            <td className="py-3 px-4 text-right font-medium text-gray-800">
+                              {item.quantity.toLocaleString()}
+                            </td>
+                            <td className="py-3 px-4 text-right text-gray-600">
+                              {item.weight} - {item.weightUnit || 'kg'}
+                            </td>
+                            <td className="py-3 px-4">
+                              <div className="flex items-center gap-2">
+                                <span className="text-gray-600">{item.location}</span>
+                                {item.locationImage && (
+                                  <img src={item.locationImage} alt="Vị trí" className="w-8 h-8 object-cover rounded" />
+                                )}
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 text-center">
+                              <Checkbox checked={!!item.productImage} disabled />
+                            </td>
+                            {canImport && (
+                              <td className="py-3 px-4 text-center">
+                                <Button variant="ghost" size="sm" onClick={() => handleEdit(item)} className="h-8 w-8 p-0 hover:bg-blue-100 text-blue-600" title="Sửa"><Edit2 className="h-4 w-4" /></Button>
+                              </td>
+                            )}
+                            {canImport && (
+                              <td className="py-3 px-4 text-center">
+                                <Button variant="ghost" size="sm" onClick={() => handleDeleteProduct(item)} className="h-8 w-8 p-0 hover:bg-red-100 text-red-600" title="Xóa"><Trash2 className="h-4 w-4" /></Button>
+                              </td>
+                            )}
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
           )}
 
           {/* ============================================================ */}
@@ -925,6 +928,18 @@ export default function WarehousePage() {
                 </div>
 
                 <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Danh mục *</label>
+                    <Input
+                      value={formData.categoryName}
+                      onChange={(e) => { setFormData({ ...formData, categoryName: e.target.value }); clearFieldError('categoryName') }}
+                      className={`border-2 ${formErrors.categoryName ? 'border-red-500 bg-red-50 focus:ring-red-400' : ''}`}
+                    />
+                    {formErrors.categoryName && (
+                      <p className="text-red-600 text-xs mt-1 font-medium">⚠️ {formErrors.categoryName}</p>
+                    )}
+                  </div>
+
                   {/* Mã hàng - có cảnh báo trùng + cảnh báo đỏ thiếu bắt buộc */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Mã hàng *</label>
@@ -1132,9 +1147,10 @@ export default function WarehousePage() {
                   ⚠️ Lưu ý: Số lượng tồn kho KHÔNG được phép thay đổi tại đây.
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Mã hàng *</label><Input value={editFormData.code} onChange={(e) => { setEditFormData({...editFormData, code: e.target.value}); clearEditFieldError('code') }} className={`border-2 ${editDuplicateCode || editFormErrors.code ? 'border-red-500 bg-red-50' : ''}`} />{editCheckingCode && !editDuplicateCode && !editFormErrors.code && (<p className="text-gray-500 text-xs mt-1">Đang kiểm tra...</p>)}{editDuplicateCode && (<p className="text-red-600 text-xs mt-1 font-medium">⚠️ Mã hàng này đã tồn tại trong kho này. Vui lòng kiểm tra lại</p>)}{editFormErrors.code && (<p className="text-red-600 text-xs mt-1 font-medium">⚠️ {editFormErrors.code}</p>)}</div>
-                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Tên hàng *</label><Input value={editFormData.name} onChange={(e) => { setEditFormData({...editFormData, name: e.target.value}); clearEditFieldError('name') }} className={`border-2 ${editDuplicateName || editFormErrors.name ? 'border-red-500 bg-red-50' : ''}`} />{editCheckingName && !editDuplicateName && !editFormErrors.name && (<p className="text-gray-500 text-xs mt-1">Đang kiểm tra...</p>)}{editDuplicateName && (<p className="text-red-600 text-xs mt-1 font-medium">⚠️ Tên hàng này đã tồn tại trong kho này. Vui lòng kiểm tra lại</p>)}{editFormErrors.name && (<p className="text-red-600 text-xs mt-1 font-medium">⚠️ {editFormErrors.name}</p>)}</div>
-                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Đơn vị tính *</label><Input value={editFormData.unit} onChange={(e) => { setEditFormData({...editFormData, unit: e.target.value}); clearEditFieldError('unit') }} className={`border-2 ${editFormErrors.unit ? 'border-red-500 bg-red-50' : ''}`} />{editFormErrors.unit && (<p className="text-red-600 text-xs mt-1 font-medium">⚠️ {editFormErrors.unit}</p>)}</div>
+                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Danh mục *</label><Input value={editFormData.categoryName} onChange={(e) => { setEditFormData({ ...editFormData, categoryName: e.target.value }); clearEditFieldError('categoryName') }} className={`border-2 ${editFormErrors.categoryName ? 'border-red-500 bg-red-50' : ''}`} />{editFormErrors.categoryName && (<p className="text-red-600 text-xs mt-1 font-medium">⚠️ {editFormErrors.categoryName}</p>)}</div>
+                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Mã hàng *</label><Input value={editFormData.code} onChange={(e) => { setEditFormData({ ...editFormData, code: e.target.value }); clearEditFieldError('code') }} className={`border-2 ${editDuplicateCode || editFormErrors.code ? 'border-red-500 bg-red-50' : ''}`} />{editCheckingCode && !editDuplicateCode && !editFormErrors.code && (<p className="text-gray-500 text-xs mt-1">Đang kiểm tra...</p>)}{editDuplicateCode && (<p className="text-red-600 text-xs mt-1 font-medium">⚠️ Mã hàng này đã tồn tại trong kho này. Vui lòng kiểm tra lại</p>)}{editFormErrors.code && (<p className="text-red-600 text-xs mt-1 font-medium">⚠️ {editFormErrors.code}</p>)}</div>
+                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Tên hàng *</label><Input value={editFormData.name} onChange={(e) => { setEditFormData({ ...editFormData, name: e.target.value }); clearEditFieldError('name') }} className={`border-2 ${editDuplicateName || editFormErrors.name ? 'border-red-500 bg-red-50' : ''}`} />{editCheckingName && !editDuplicateName && !editFormErrors.name && (<p className="text-gray-500 text-xs mt-1">Đang kiểm tra...</p>)}{editDuplicateName && (<p className="text-red-600 text-xs mt-1 font-medium">⚠️ Tên hàng này đã tồn tại trong kho này. Vui lòng kiểm tra lại</p>)}{editFormErrors.name && (<p className="text-red-600 text-xs mt-1 font-medium">⚠️ {editFormErrors.name}</p>)}</div>
+                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Đơn vị tính *</label><Input value={editFormData.unit} onChange={(e) => { setEditFormData({ ...editFormData, unit: e.target.value }); clearEditFieldError('unit') }} className={`border-2 ${editFormErrors.unit ? 'border-red-500 bg-red-50' : ''}`} />{editFormErrors.unit && (<p className="text-red-600 text-xs mt-1 font-medium">⚠️ {editFormErrors.unit}</p>)}</div>
                   <div><label className="block text-sm font-medium text-gray-700 mb-1">Số lượng (không thể sửa)</label><Input type="number" value={editFormData.quantity} className="border-2 bg-gray-100 cursor-not-allowed" disabled /></div>
                   <div>
                     <div className="flex items-center justify-between mb-1">
@@ -1145,15 +1161,15 @@ export default function WarehousePage() {
                       </label>
                     </div>
                     <div className="flex gap-2">
-                      <Input type="number" step="0.1" value={editFormData.weight} onChange={(e) => { setEditFormData({...editFormData, weight: Number(e.target.value)}); clearEditFieldError('weight') }} disabled={editWeightUnknown} className={`border-2 flex-1 ${editFormErrors.weight ? 'border-red-500 bg-red-50' : ''} ${editWeightUnknown ? 'bg-gray-100 cursor-not-allowed' : ''}`} />
-                      <Input type="text" value={editFormData.weightUnit} onChange={(e) => { setEditFormData({...editFormData, weightUnit: e.target.value}); clearEditFieldError('weightUnit') }} disabled={editWeightUnknown} className={`border-2 w-24 ${editFormErrors.weightUnit ? 'border-red-500 bg-red-50' : ''} ${editWeightUnknown ? 'bg-gray-100 cursor-not-allowed' : ''}`} placeholder="Đơn vị" />
+                      <Input type="number" step="0.1" value={editFormData.weight} onChange={(e) => { setEditFormData({ ...editFormData, weight: Number(e.target.value) }); clearEditFieldError('weight') }} disabled={editWeightUnknown} className={`border-2 flex-1 ${editFormErrors.weight ? 'border-red-500 bg-red-50' : ''} ${editWeightUnknown ? 'bg-gray-100 cursor-not-allowed' : ''}`} />
+                      <Input type="text" value={editFormData.weightUnit} onChange={(e) => { setEditFormData({ ...editFormData, weightUnit: e.target.value }); clearEditFieldError('weightUnit') }} disabled={editWeightUnknown} className={`border-2 w-24 ${editFormErrors.weightUnit ? 'border-red-500 bg-red-50' : ''} ${editWeightUnknown ? 'bg-gray-100 cursor-not-allowed' : ''}`} placeholder="Đơn vị" />
                     </div>
                     {editFormErrors.weight && (<p className="text-red-600 text-xs mt-1 font-medium">⚠️ {editFormErrors.weight}</p>)}
                     {editFormErrors.weightUnit && (<p className="text-red-600 text-xs mt-1 font-medium">⚠️ {editFormErrors.weightUnit}</p>)}
                     <p className="text-xs text-gray-400 mt-1">VD: kg, g, lít, ml, chai...</p>
                   </div>
-                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Vị trí *</label><Input value={editFormData.location} onChange={(e) => { setEditFormData({...editFormData, location: e.target.value}); clearEditFieldError('location') }} className={`border-2 ${editFormErrors.location ? 'border-red-500 bg-red-50' : ''}`} />{editFormErrors.location && (<p className="text-red-600 text-xs mt-1 font-medium">⚠️ {editFormErrors.location}</p>)}</div>
-                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Ngày nhập liệu *</label><Input type="date" value={editFormData.importDate} onChange={(e) => { setEditFormData({...editFormData, importDate: e.target.value}); clearEditFieldError('importDate') }} className={`border-2 ${editFormErrors.importDate ? 'border-red-500 bg-red-50' : ''}`} />{editFormErrors.importDate && (<p className="text-red-600 text-xs mt-1 font-medium">⚠️ {editFormErrors.importDate}</p>)}</div>
+                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Vị trí *</label><Input value={editFormData.location} onChange={(e) => { setEditFormData({ ...editFormData, location: e.target.value }); clearEditFieldError('location') }} className={`border-2 ${editFormErrors.location ? 'border-red-500 bg-red-50' : ''}`} />{editFormErrors.location && (<p className="text-red-600 text-xs mt-1 font-medium">⚠️ {editFormErrors.location}</p>)}</div>
+                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Ngày nhập liệu *</label><Input type="date" value={editFormData.importDate} onChange={(e) => { setEditFormData({ ...editFormData, importDate: e.target.value }); clearEditFieldError('importDate') }} className={`border-2 ${editFormErrors.importDate ? 'border-red-500 bg-red-50' : ''}`} />{editFormErrors.importDate && (<p className="text-red-600 text-xs mt-1 font-medium">⚠️ {editFormErrors.importDate}</p>)}</div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">📷 Ảnh sản phẩm</label>
                     <div className="flex gap-4 items-start">
@@ -1164,7 +1180,7 @@ export default function WarehousePage() {
                       {editFormData.productImage && (
                         <div className="relative">
                           <img src={editFormData.productImage} alt="Ảnh SP" className="w-24 h-24 object-cover rounded-lg border-2 border-blue-200" />
-                          <button onClick={() => setEditFormData({...editFormData, productImage: ''})} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-600"><X className="w-4 h-4" /></button>
+                          <button onClick={() => setEditFormData({ ...editFormData, productImage: '' })} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-600"><X className="w-4 h-4" /></button>
                         </div>
                       )}
                     </div>
@@ -1179,7 +1195,7 @@ export default function WarehousePage() {
                       {editFormData.locationImage && (
                         <div className="relative">
                           <img src={editFormData.locationImage} alt="Ảnh vị trí" className="w-24 h-24 object-cover rounded-lg border-2" />
-                          <button onClick={() => setEditFormData({...editFormData, locationImage: ''})} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-600"><X className="w-4 h-4" /></button>
+                          <button onClick={() => setEditFormData({ ...editFormData, locationImage: '' })} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-600"><X className="w-4 h-4" /></button>
                         </div>
                       )}
                     </div>

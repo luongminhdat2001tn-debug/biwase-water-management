@@ -58,6 +58,7 @@ export interface Product {
   id: number
   code: string
   name: string
+  categoryName: string   // Danh mục hàng (bắt buộc)
   unit: string
   quantity: number
   weight: number

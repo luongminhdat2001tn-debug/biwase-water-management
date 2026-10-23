@@ -317,3 +317,65 @@ enforcement (approved): no schema change, no DB unique index.
 - [ ] **Step 1:** `npm run build` clean; self-review the diff for type slips (build ignores TS).
 - [ ] **Step 2:** Manual checklist in the spec section (same code in another warehouse allowed,
       duplicates in the same warehouse blocked, own code on edit allowed, print �VT correct).
+
+## Plan: "Danh mục" (category_name) mandatory in both forms (English)
+
+Goal: spec `docs/specs/warehouse.md` section `"Danh mục" (category_name) — mandatory in both forms`.
+Free-text input (approved, no dropdown). No schema change: `category_name VARCHAR(200) NOT NULL`
+already exists in `supabase/schema.sql`.
+
+Reference lines (verify before editing): `Product` `lib/constants.ts:57-69`;
+`mapProductFromDB` `lib/db.ts:312-326`; `createProduct` `lib/db.ts:162-182`;
+`updateProduct` `lib/db.ts:185-204`; import `formData` `app/warehouse/page.tsx:42-53`,
+`formErrors` 57-60, `validateForm` 89-102, `handleImport` 370-381, import JSX `Tên hàng` 947-963;
+`editFormData` 198-200, `editFormErrors` 207-210, `validateEditForm` 239-251,
+`handleEdit` 495-522, `handleSaveEdit` diff 567-575, edit JSX `Tên hàng` 1136.
+
+No test framework in repo: verification = `npm run build` + spec manual checklist 33-37.
+
+### Task 1: Type + data layer
+
+**Files:**
+- Modify: `lib/constants.ts`, `lib/db.ts`
+
+**Interfaces:**
+- Produces: `Product.categoryName: string` (required); `createProduct` / `updateProduct`
+  persist `category_name`; `mapProductFromDB` reads it (`|| ''`).
+
+- [ ] **Step 1:** `Product` interface: add `categoryName: string    // Danh mục hàng (bắt buộc)` immediately after `name: string`.
+- [ ] **Step 2:** `mapProductFromDB`: add `categoryName: row.category_name || '',` after `name: row.name || '',`.
+- [ ] **Step 3:** `createProduct` insert: add `category_name: product.categoryName,` after `name: product.name,`.
+- [ ] **Step 4:** `updateProduct`: add `if (updates.categoryName !== undefined) dbUpdates.category_name = updates.categoryName` next to the `name` line.
+- [ ] **Step 5:** `grep -rn "categoryName" --include=*.ts --include=*.tsx` — only `lib/db.ts` + `lib/constants.ts` so far (no other `Product` literals to fix).
+
+### Task 2: Nhập Liệu form
+
+**Files:** Modify `app/warehouse/page.tsx`
+
+- [ ] **Step 1:** `formData` initial state: add `categoryName: ''` after `name: ''`.
+- [ ] **Step 2:** `formErrors` type: add `categoryName?: string`.
+- [ ] **Step 3:** `validateForm()`: add `if (!String(formData.categoryName || '').trim()) errors.categoryName = 'Vui lòng nhập danh mục'` after the `name` check.
+- [ ] **Step 4:** `handleImport()` reset object: add `categoryName: ''` after `name: ''`.
+- [ ] **Step 5:** Import modal JSX, between the `Tên hàng` block and the `Đơn vị tính` block: `Danh mục *` label + `<Input value={formData.categoryName} onChange={(e) => { setFormData({ ...formData, categoryName: e.target.value }); clearFieldError('categoryName') }} className={`border-2 ${formErrors.categoryName ? 'border-red-500 bg-red-50 focus:ring-red-400' : ''}`} />` + `formErrors.categoryName` red `<p>` (`⚠️ {formErrors.categoryName}`).
+
+### Task 3: Sửa Sản Phẩm Tồn Kho form
+
+**Files:** Modify `app/warehouse/page.tsx`
+
+- [ ] **Step 1:** `editFormData` initial state: add `categoryName: ''`.
+- [ ] **Step 2:** `editFormErrors` type: add `categoryName?: string`.
+- [ ] **Step 3:** `validateEditForm()`: add the same `Vui lòng nhập danh mục` rule after the `name` check.
+- [ ] **Step 4:** `handleEdit()` `setEditFormData({...})`: add `categoryName: product.categoryName` after `name: product.name`.
+- [ ] **Step 5:** Edit modal JSX: add a `Danh mục *` `<div>` (label + `Input` bound to `editFormData.categoryName`, `clearEditFieldError('categoryName')`, red class + red `<p>`) immediately after the `Tên hàng` `<div>` (line ~1136). Grid is 2-col, so it reflows on its own.
+- [ ] **Step 6:** `handleSaveEdit()` diff block: add `if (old.categoryName !== editFormData.categoryName) changes.push(`Danh mục: ${old.categoryName} → ${editFormData.categoryName}`)` next to the `Tên` diff.
+- [ ] **Step 7:** Confirm the save path needs no other change: `updateProduct(editingProduct.id, { ...editFormData, ... })` carries `categoryName`, and `createProduct({ ...formData, ... })` carries it too.
+
+### Task 4: Verify + commit
+
+- [ ] **Step 1:** `npm run build` clean; re-read the diff for type slips (build ignores TS).
+- [ ] **Step 2:** Manual checklist items 33-37 in `docs/specs/warehouse.md`.
+- [ ] **Step 3:** Commit: `git add app/warehouse/page.tsx lib/db.ts lib/constants.ts docs/specs/warehouse.md docs/plans/warehouse.md` → `feat: add mandatory category_name to product import and edit forms`.
+
+### Scope Guard
+- No `Danh Mục` table column, no inventory detail row, no Xuất kho / Nhập kho / history / Excel changes.
+- No schema migration, no new dependency, no category list constant.

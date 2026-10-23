@@ -166,6 +166,7 @@ export async function createProduct(product: Omit<Product, 'id'> & { warehouseId
       warehouse_id: product.warehouseId,
       code: product.code,
       name: product.name,
+      category_name: product.categoryName,
       unit: product.unit,
       quantity: product.quantity,
       weight: product.weight,
@@ -186,6 +187,7 @@ export async function updateProduct(id: number, updates: Partial<Product>): Prom
   const dbUpdates: any = {}
   if (updates.code !== undefined) dbUpdates.code = updates.code
   if (updates.name !== undefined) dbUpdates.name = updates.name
+  if (updates.categoryName !== undefined) dbUpdates.category_name = updates.categoryName
   if (updates.unit !== undefined) dbUpdates.unit = updates.unit
   if (updates.quantity !== undefined) dbUpdates.quantity = updates.quantity
   if (updates.weight !== undefined) dbUpdates.weight = updates.weight
@@ -314,6 +316,7 @@ function mapProductFromDB(row: any): Product {
     id: row.id,
     code: row.code || '',
     name: row.name || '',
+    categoryName: row.category_name || '',
     unit: row.unit || '',
     quantity: row.quantity || 0,
     weight: parseFloat(row.weight) || 0,

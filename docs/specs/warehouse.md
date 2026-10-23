@@ -211,6 +211,32 @@ Shared shell via `components/sidebar.tsx`. All Supabase access via `lib/db.ts`.
 - Files: `app/warehouse/page.tsx` (+ this spec). No `lib/db.ts` change.
 - Files: only `app/warehouse/page.tsx` (+ this spec).
 
+## Feature: "Danh mục" (category_name) — mandatory in both forms
+- DB column already exists: `products.category_name VARCHAR(200) NOT NULL`
+  (`supabase/schema.sql`). No schema change. Before this feature the code omitted it, so
+  `createProduct` violated NOT NULL; this feature also fixes that.
+- `lib/constants.ts`: `Product` gains `categoryName: string` (non-optional).
+- `lib/db.ts`: `mapProductFromDB` maps `categoryName: row.category_name || ''`;
+  `createProduct` inserts `category_name: product.categoryName`;
+  `updateProduct` maps `category_name` when `updates.categoryName !== undefined`.
+- `app/warehouse/page.tsx`, BOTH forms:
+  - `formData` (Nhập Liệu) and `editFormData` (Sửa Sản Phẩm Tồn Kho) gain
+    `categoryName: ''`; reset in `handleImport` / `handleEdit` (`handleEdit` copies
+    `product.categoryName`).
+  - UI: plain `<Input>` (free text — no dropdown, no category table), label
+    `Danh mục *`, placed immediately AFTER `Tên hàng` in both modals.
+  - Validation: empty / whitespace-only -> inline red error
+    `Vui lòng nhập danh mục` (`border-red-500 bg-red-50` + `⚠️ ... <p>`, same pattern as
+    the other mandatory fields), blocks save before any DB call. Import form becomes
+    9 mandatory fields; edit form becomes 8.
+  - Errors clear live on `onChange` (`clearFieldError` / `clearEditFieldError`).
+  - Edit history diff adds `Danh mục: {old} → {new}` when changed.
+- Existing rows: a product whose `category_name` is empty opens the edit modal with an
+  empty field and must be filled before saving (mandatory applies to edits too).
+- Out of scope (approved): no `Danh Mục` column in the warehouse product table, no change
+  to inventory detail modal, Xuất kho / Nhập kho modals, history page, or Excel export.
+- Files: `app/warehouse/page.tsx`, `lib/db.ts`, `lib/constants.ts` (+ this spec).
+
 ## Validation Rules
 - Empty = `''`, `null`, `undefined`, or whitespace-only for strings.
 - `quantity` / `weight`: empty string counts as missing; `0` is treated as missing
@@ -282,3 +308,14 @@ Shared shell via `components/sidebar.tsx`. All Supabase access via `lib/db.ts`.
 31. Edit a product with weight `5` -> tick `Chưa rõ` -> Save -> history detail reads
     `Khối lượng: 5 - kg → 0 - Chưa rõ`; the edit modal reopens already ticked.
 32. `npm run build` passes.
+
+## Manual Test Checklist ("Danh mục" field)
+33. Nhập Liệu: leave `Danh mục *` empty -> Save -> red `Vui lòng nhập danh mục`,
+    no DB call, no history row. Type -> red clears live.
+34. Nhập Liệu: fill all 9 mandatory fields -> Save succeeds; row persists with the
+    entered category (reopen Sửa for that product -> same value shown).
+35. Sửa Sản Phẩm Tồn Kho: clear `Danh mục *` -> `Cập Nhật` blocked with red; retype ->
+    allowed. Change the value -> history row contains `Danh mục: {old} → {new}`.
+36. Open Sửa on a product with empty `category_name` -> field empty -> must fill before
+    `Cập Nhật` passes.
+37. `npm run build` passes.
