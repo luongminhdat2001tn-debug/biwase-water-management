@@ -202,3 +202,38 @@ table Card 82-137; empty-row `colSpan` 116.
 ### Scope Guard
 - No `lib/db.ts` / `lib/constants.ts` / schema change; no `Danh mục` row in the detail modal; no unit shown on `Tổng Số Lượng`.
 - Search predicate and warehouse tabs unchanged; `Xem` modal unchanged.
+
+## Plan: Full-size image lightbox in `Thông Tin Sản Phẩm` (English)
+
+Goal: spec `docs/specs/inventory.md` section "Full-size image lightbox". Only
+`app/inventory/page.tsx` changes. No `lib/*` or schema change.
+
+Reference lines: state block 24-28; detail modal 195-196; product image block 208-215;
+location image block 216-223; modal footer 240.
+
+### Task 1: Lightbox state + Esc handling
+
+**Files:** Modify `app/inventory/page.tsx`
+
+- [ ] **Step 1:** Add state next to `openCategory`: `const [lightboxImage, setLightboxImage] = useState<{ src: string; alt: string } | null>(null)`.
+- [ ] **Step 2:** Add a `useEffect` after the existing session effect: when `lightboxImage` is set, register `window.addEventListener('keydown', ...)` closing on `Escape` (`setLightboxImage(null)`); cleanup removes the listener; effect dependency `[lightboxImage]`, early `return` when null.
+- [ ] **Step 3:** Add `Maximize2` to the `lucide-react` import.
+
+### Task 2: Buttons + overlay
+
+**Files:** Modify `app/inventory/page.tsx`
+
+- [ ] **Step 1:** Product image block: replace the `<p className="text-sm text-gray-500 mb-2">📷 Hình ảnh sản phẩm</p>` with a `flex items-center justify-between mb-2` row containing that label `<p className="text-sm text-gray-500">…</p>` and `<Button variant="ghost" size="sm" onClick={() => setLightboxImage({ src: selectedProduct.productImage, alt: selectedProduct.name })} className="text-blue-600 hover:bg-blue-100"><Maximize2 className="h-4 w-4 mr-1" /> Xem ảnh</Button>`.
+- [ ] **Step 2:** Same for the location block with `src: selectedProduct.locationImage, alt: 'Vị trí'`.
+- [ ] **Step 3:** After the detail modal block (before the closing `</div>` of the page container), add:
+      `{isDetailModalOpen && lightboxImage && (<div className="fixed inset-0 z-[60] bg-black/90 flex items-center justify-center p-4" onClick={() => setLightboxImage(null)}><button onClick={() => setLightboxImage(null)} className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-lg" title="Đóng"><X className="w-6 h-6 text-white" /></button><img src={lightboxImage.src} alt={lightboxImage.alt} className="max-w-full max-h-full object-contain" onClick={(e) => e.stopPropagation()} /></div>)}`.
+- [ ] **Step 4:** Vietnamese comment above the overlay: `// Lightbox xem ảnh toàn bộ (bấm nền / X / Esc để đóng)`.
+
+### Task 3: Verify
+
+- [ ] **Step 1:** `npx tsc --noEmit` clean, then `npm run build` clean.
+- [ ] **Step 2:** Manual checklist items 22-27 in `docs/specs/inventory.md`.
+
+### Scope Guard
+- No zoom/pan/download/next-image; no change to detail modal fields, table, search, or tabs.
+- Buttons only exist inside the existing `{selectedProduct.productImage && ...}` / `{selectedProduct.locationImage && ...}` blocks.

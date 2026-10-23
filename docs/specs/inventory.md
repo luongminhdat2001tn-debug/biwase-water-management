@@ -124,3 +124,33 @@ Shared shell via `components/sidebar.tsx`. All Supabase access via `lib/db.ts`.
 19. `Xem` opens the same detail modal as before.
 20. Warehouse with zero products -> empty state spans the full parent width.
 21. `npm run build` passes.
+
+## Feature: Full-size image lightbox in `Thông Tin Sản Phẩm`
+- Both image blocks in the detail modal (`📷 Hình ảnh sản phẩm` = `productImage`,
+  `📍 Ảnh vị trí kho` = `locationImage`) get a `Xem ảnh` button (`Maximize2` icon,
+  ghost/sm, blue) in the same row as the block label. The block (and therefore the
+  button) only renders when the image URL exists — unchanged condition.
+- Clicking sets `lightboxImage: { src, alt } | null`; a fixed overlay
+  (`fixed inset-0 z-[60] bg-black/90`, above the detail modal's `z-50`) renders the image
+  with `max-w-full max-h-full object-contain` so nothing is cropped (the modal itself
+  crops with `object-cover` + fixed heights).
+- Close: `X` button top-right, clicking the dark backdrop, or `Esc`
+  (`keydown` listener added only while `lightboxImage` is set, removed on cleanup).
+- Lightbox renders only when `isDetailModalOpen && lightboxImage` -> closing the detail
+  modal hides it too (no stale overlay on next open).
+- Accepted ceiling: no pinch-zoom / pan / download / next-image navigation; the browser
+  has no native zoom for the overlay. Add a zoom library only if product photos need
+  detail inspection.
+- Files: `app/inventory/page.tsx` (+ this spec). No `lib/*`, schema, or DB change.
+
+## Manual Test Checklist (image lightbox)
+22. Open `Xem` on a product with both images -> each block shows `Xem ảnh`; products
+    missing an image show no block and no button.
+23. Click `Xem ảnh` on `Hình ảnh sản phẩm` -> full-screen overlay shows the whole,
+    uncropped image; the detail modal is not visible/blocking.
+24. Close via `X` -> back to the detail modal with content intact; repeat with clicking
+    the black backdrop and with `Esc`.
+25. Open the location image lightbox -> shows the location image (not the product image).
+26. Close the detail modal while the lightbox is open -> next `Xem` on any product shows
+    no leftover overlay.
+27. `npm run build` passes.

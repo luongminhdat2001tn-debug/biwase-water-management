@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Archive, Factory, Building, ShoppingBag, FlaskConical, Search, Eye, X, ChevronDown, ChevronRight } from 'lucide-react'
+import { Archive, Factory, Building, ShoppingBag, FlaskConical, Search, Eye, X, ChevronDown, ChevronRight, Maximize2 } from 'lucide-react'
 import { type Product } from '@/lib/constants'
 import { getAllProducts } from '@/lib/db'
 
@@ -26,6 +26,8 @@ export default function InventoryPage() {
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
   // Danh mục đang mở (accordion - chỉ 1 danh mục mở tại một thời điểm)
   const [openCategory, setOpenCategory] = useState<string | null>(null)
+  // Ảnh đang xem toàn bộ (lightbox)
+  const [lightboxImage, setLightboxImage] = useState<{ src: string; alt: string } | null>(null)
 
   const loadAllProducts = async () => {
     const data = await getAllProducts()
@@ -38,6 +40,14 @@ export default function InventoryPage() {
     setUser(JSON.parse(userData))
     loadAllProducts()
   }, [])
+
+  // Đóng lightbox bằng phím Esc
+  useEffect(() => {
+    if (!lightboxImage) return
+    const onKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') setLightboxImage(null) }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [lightboxImage])
 
   const currentItems = allProducts[selectedWarehouse] || []
   const filteredItems = currentItems.filter(
@@ -208,14 +218,20 @@ export default function InventoryPage() {
                 {/* Ảnh sản phẩm */}
                 {selectedProduct.productImage && (
                   <div className="mb-4">
-                    <p className="text-sm text-gray-500 mb-2">📷 Hình ảnh sản phẩm</p>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-sm text-gray-500">📷 Hình ảnh sản phẩm</p>
+                      <Button variant="ghost" size="sm" onClick={() => setLightboxImage({ src: selectedProduct.productImage, alt: selectedProduct.name })} className="text-blue-600 hover:bg-blue-100"><Maximize2 className="h-4 w-4 mr-1" /> Xem ảnh</Button>
+                    </div>
                     <img src={selectedProduct.productImage} alt={selectedProduct.name} className="w-full h-64 object-cover rounded-xl border-2 border-blue-200" />
                   </div>
                 )}
                 {/* Ảnh vị trí */}
                 {selectedProduct.locationImage && (
                   <div className="mb-4">
-                    <p className="text-sm text-gray-500 mb-2">📍 Ảnh vị trí kho</p>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-sm text-gray-500">📍 Ảnh vị trí kho</p>
+                      <Button variant="ghost" size="sm" onClick={() => setLightboxImage({ src: selectedProduct.locationImage, alt: 'Vị trí' })} className="text-blue-600 hover:bg-blue-100"><Maximize2 className="h-4 w-4 mr-1" /> Xem ảnh</Button>
+                    </div>
                     <img src={selectedProduct.locationImage} alt="Vị trí" className="w-full h-48 object-cover rounded-xl border-2 border-gray-200" />
                   </div>
                 )}
@@ -229,6 +245,21 @@ export default function InventoryPage() {
                 </div>
                 <div className="flex gap-3 mt-6"><Button variant="outline" onClick={() => setIsDetailModalOpen(false)} className="flex-1">Đóng</Button></div>
               </div>
+            </div>
+          )}
+
+          {/* Lightbox xem ảnh toàn bộ (bấm nền / X / Esc để đóng) */}
+          {isDetailModalOpen && lightboxImage && (
+            <div className="fixed inset-0 z-[60] bg-black/90 flex items-center justify-center p-4" onClick={() => setLightboxImage(null)}>
+              <button onClick={() => setLightboxImage(null)} className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-lg" title="Đóng">
+                <X className="w-6 h-6 text-white" />
+              </button>
+              <img
+                src={lightboxImage.src}
+                alt={lightboxImage.alt}
+                className="max-w-full max-h-full object-contain"
+                onClick={(e) => e.stopPropagation()}
+              />
             </div>
           )}
         </div>
