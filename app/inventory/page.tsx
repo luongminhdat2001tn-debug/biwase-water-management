@@ -10,191 +10,170 @@ import { Archive, Factory, Building, ShoppingBag, FlaskConical, Search, Eye, X, 
 import { type Product } from '@/lib/constants'
 import { getAllProducts } from '@/lib/db'
 
+// Tailwind cần class đầy đủ dạng chuỗi, nên khai báo sẵn ở đây
 const WAREHOUSES = [
-  { id: 'kho-vat-tu', name: 'Kho Vật Tư Nhà Máy', icon: Factory, color: 'blue' },
-  { id: 'kho-xay-dung', name: 'Kho Xây Dựng Cơ Bản', icon: Building, color: 'orange' },
-  { id: 'kho-phong-thi-nghiem', name: 'Kho Phòng Thí Nghiệm', icon: FlaskConical, color: 'purple' },
-  { id: 'kho-thuong-mai', name: 'Kho Thương Mại', icon: ShoppingBag, color: 'green' },
+  { id: 'kho-vat-tu', name: 'Kho Vật Tư Nhà Máy', icon: Factory, text: 'text-blue-600', border: 'border-l-blue-600',
+    tabOn: 'bg-blue-600 text-white border-blue-700', tabOff: 'bg-white text-blue-600 border-blue-200 hover:border-blue-400' },
+  { id: 'kho-xay-dung', name: 'Kho Xây Dựng Cơ Bản', icon: Building, text: 'text-orange-500', border: 'border-l-orange-500',
+    tabOn: 'bg-orange-500 text-white border-orange-600', tabOff: 'bg-white text-orange-500 border-orange-200 hover:border-orange-400' },
+  { id: 'kho-phong-thi-nghiem', name: 'Kho Phòng Thí Nghiệm', icon: FlaskConical, text: 'text-purple-600', border: 'border-l-purple-600',
+    tabOn: 'bg-purple-600 text-white border-purple-700', tabOff: 'bg-white text-purple-600 border-purple-200 hover:border-purple-400' },
+  { id: 'kho-thuong-mai', name: 'Kho Thương Mại', icon: ShoppingBag, text: 'text-green-600', border: 'border-l-green-600',
+    tabOn: 'bg-green-600 text-white border-green-700', tabOff: 'bg-white text-green-600 border-green-200 hover:border-green-400' },
 ]
 
+const COLUMNS = [
+  { label: 'STT', className: 'text-center w-16' },
+  { label: 'Mã Hàng', className: 'text-left' },
+  { label: 'Tên Hàng', className: 'text-left' },
+  { label: 'Số Lượng', className: 'text-right' },
+  { label: 'Có Hình Ảnh', className: 'text-center' },
+  { label: 'Thông Tin', className: 'text-center' },
+]
+
+type Lightbox = { src: string; alt: string }
+
 export default function InventoryPage() {
-  const [user, setUser] = useState<any>(null)
-  const [selectedWarehouse, setSelectedWarehouse] = useState('kho-vat-tu')
+  const [ready, setReady] = useState(false)
+  const [selectedWarehouse, setSelectedWarehouse] = useState(WAREHOUSES[0].id)
   const [searchTerm, setSearchTerm] = useState('')
   const [allProducts, setAllProducts] = useState<Record<string, Product[]>>({})
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
-  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
-  // Danh mục đang mở (accordion - chỉ 1 danh mục mở tại một thời điểm)
-  const [openCategory, setOpenCategory] = useState<string | null>(null)
-  // Ảnh đang xem toàn bộ (lightbox)
-  const [lightboxImage, setLightboxImage] = useState<{ src: string; alt: string } | null>(null)
-
-  const loadAllProducts = async () => {
-    const data = await getAllProducts()
-    setAllProducts(data)
-  }
+  const [openCategory, setOpenCategory] = useState<string | null>(null) // accordion: chỉ mở 1 danh mục
+  const [lightbox, setLightbox] = useState<Lightbox | null>(null)
 
   useEffect(() => {
-    const userData = localStorage.getItem('user')
-    if (!userData) { window.location.href = '/'; return }
-    setUser(JSON.parse(userData))
-    loadAllProducts()
+    if (!localStorage.getItem('user')) { window.location.href = '/'; return }
+    setReady(true)
+    getAllProducts().then(setAllProducts)
   }, [])
 
   // Đóng lightbox bằng phím Esc
   useEffect(() => {
-    if (!lightboxImage) return
-    const onKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') setLightboxImage(null) }
+    if (!lightbox) return
+    const onKeyDown = (e: KeyboardEvent) => e.key === 'Escape' && setLightbox(null)
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [lightboxImage])
+  }, [lightbox])
 
-  const currentItems = allProducts[selectedWarehouse] || []
-  const filteredItems = currentItems.filter(
-    (item) => item.name.toLowerCase().includes(searchTerm.toLowerCase()) || item.code.toLowerCase().includes(searchTerm.toLowerCase())
+  if (!ready) return <div className="flex items-center justify-center h-screen">Loading...</div>
+
+  const warehouse = WAREHOUSES.find((w) => w.id === selectedWarehouse)!
+  const keyword = searchTerm.trim().toLowerCase()
+  const items = (allProducts[selectedWarehouse] || []).filter(
+    (p) => p.name.toLowerCase().includes(keyword) || p.code.toLowerCase().includes(keyword)
   )
-  const currentWarehouse = WAREHOUSES.find(w => w.id === selectedWarehouse)
-  // Đang tìm kiếm -> tự mở tất cả danh mục có kết quả
-  const isSearching = searchTerm.trim() !== ''
-  // Gom sản phẩm theo danh mục; danh mục trống (dữ liệu cũ) -> "Chưa phân loại"
-  const categoryGroups = (() => {
-    const map = new Map<string, { name: string; total: number; items: Product[] }>()
-    for (const item of filteredItems) {
-      const key = (item.categoryName || '').trim() || 'Chưa phân loại'
-      const group = map.get(key) || { name: key, total: 0, items: [] }
-      group.total += item.quantity
-      group.items.push(item)
-      map.set(key, group)
-    }
-    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, 'vi'))
-  })()
 
-  const handleViewDetail = (product: Product) => { setSelectedProduct(product); setIsDetailModalOpen(true) }
+  // Sản phẩm có danh mục -> gom nhóm; không có danh mục -> hiển thị thành dòng riêng
+  const groupMap = new Map<string, { name: string; total: number; items: Product[] }>()
+  const standalone: Product[] = []
+  for (const p of items) {
+    const name = (p.categoryName || '').trim()
+    if (!name) { standalone.push(p); continue }
+    const group = groupMap.get(name) || { name, total: 0, items: [] }
+    group.total += p.quantity
+    group.items.push(p)
+    groupMap.set(name, group)
+  }
+  const groups = Array.from(groupMap.values()).sort((a, b) => a.name.localeCompare(b.name, 'vi'))
 
-  if (!user) return <div className="flex items-center justify-center h-screen">Loading...</div>
+  const isOpen = (name: string) => keyword !== '' || openCategory === name // đang tìm kiếm -> mở hết
+  const toggle = (name: string) => setOpenCategory((prev) => (prev === name ? null : name))
 
   return (
     <div className="flex">
       <Sidebar />
       <div className="flex-1 md:ml-64">
         <div className="p-4 md:p-8 bg-gray-50 min-h-screen">
-          <div className="mb-8"><h1 className="text-3xl font-bold text-gray-800">Tồn Kho</h1></div>
+          <h1 className="mb-8 text-3xl font-bold text-gray-800">Tồn Kho</h1>
 
-          {/* Warehouse Tabs */}
+          {/* Warehouse tabs */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            {WAREHOUSES.map((warehouse) => {
-              const Icon = warehouse.icon
-              const isSelected = selectedWarehouse === warehouse.id
-              const colorClasses: Record<string, string> = {
-                blue: isSelected ? 'bg-blue-600 text-white border-blue-700' : 'bg-white text-blue-600 border-blue-200 hover:border-blue-400',
-                orange: isSelected ? 'bg-orange-500 text-white border-orange-600' : 'bg-white text-orange-500 border-orange-200 hover:border-orange-400',
-                purple: isSelected ? 'bg-purple-600 text-white border-purple-700' : 'bg-white text-purple-600 border-purple-200 hover:border-purple-400',
-                green: isSelected ? 'bg-green-600 text-white border-green-700' : 'bg-white text-green-600 border-green-200 hover:border-green-400',
-              }
+            {WAREHOUSES.map((w) => {
+              const Icon = w.icon
+              const selected = w.id === selectedWarehouse
               return (
-                <button key={warehouse.id} onClick={() => { setSelectedWarehouse(warehouse.id); setOpenCategory(null) }} className={`p-4 rounded-xl border-2 transition-all flex items-center gap-3 ${colorClasses[warehouse.color]}`}>
+                <button
+                  key={w.id}
+                  onClick={() => { setSelectedWarehouse(w.id); setOpenCategory(null) }}
+                  className={`p-4 rounded-xl border-2 transition-all flex items-center gap-3 ${selected ? w.tabOn : w.tabOff}`}
+                >
                   <Icon className="w-8 h-8" />
                   <div className="text-left">
-                    <p className="font-semibold">{warehouse.name}</p>
-                    <p className={`text-sm ${isSelected ? 'opacity-80' : 'opacity-60'}`}>{allProducts[warehouse.id]?.length || 0} sản phẩm</p>
+                    <p className="font-semibold">{w.name}</p>
+                    <p className={`text-sm ${selected ? 'opacity-80' : 'opacity-60'}`}>{allProducts[w.id]?.length || 0} sản phẩm</p>
                   </div>
                 </button>
               )
             })}
           </div>
 
-          {/* Bảng nhóm theo danh mục: STT, Tên Danh Mục, Tổng Số Lượng.
-              Bấm tên danh mục để mở/đóng bảng con (accordion - 1 danh mục mở). */}
-          <Card className={`border-l-4 ${
-            currentWarehouse?.color === 'blue' ? 'border-l-blue-600' :
-            currentWarehouse?.color === 'orange' ? 'border-l-orange-500' :
-            currentWarehouse?.color === 'purple' ? 'border-l-purple-600' : 'border-l-green-600'
-          }`}>
+          <Card className={`border-l-4 ${warehouse.border}`}>
             <CardHeader>
-              <CardTitle className={`flex items-center gap-2 ${
-                currentWarehouse?.color === 'blue' ? 'text-blue-600' :
-                currentWarehouse?.color === 'orange' ? 'text-orange-500' :
-                currentWarehouse?.color === 'purple' ? 'text-purple-600' : 'text-green-600'
-              }`}>
-                <Archive className="w-5 h-5" /> {currentWarehouse?.name} - Tồn Kho
+              <CardTitle className={`flex items-center gap-2 ${warehouse.text}`}>
+                <Archive className="w-5 h-5" /> {warehouse.name} - Tồn Kho
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6">
               <div className="relative mb-4">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <Input placeholder="Tìm kiếm theo mã hàng hoặc tên hàng..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10 border-2 border-gray-200" />
+                <Input
+                  placeholder="Tìm kiếm theo mã hàng hoặc tên hàng..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 border-2 border-gray-200"
+                />
               </div>
+
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-gray-100">
-                      <th className="text-center py-3 px-4 font-semibold text-gray-700 w-16">STT</th>
-                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Tên Danh Mục</th>
-                      <th className="text-right py-3 px-4 font-semibold text-gray-700">Tổng Số Lượng</th>
+                      {COLUMNS.map((col) => (
+                        <th key={col.label} className={`py-3 px-4 font-semibold text-gray-700 ${col.className}`}>{col.label}</th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {categoryGroups.length === 0 ? (
-                      <tr><td colSpan={3} className="text-center py-8 text-gray-500"><Archive className="w-16 h-16 mx-auto mb-2 text-gray-300" /><p>Không có sản phẩm tồn kho</p></td></tr>
+                    {items.length === 0 ? (
+                      <tr>
+                        <td colSpan={COLUMNS.length} className="text-center py-8 text-gray-500">
+                          <Archive className="w-16 h-16 mx-auto mb-2 text-gray-300" />
+                          <p>Không có sản phẩm tồn kho</p>
+                        </td>
+                      </tr>
                     ) : (
-                      categoryGroups.map((group, index) => {
-                        // Khi đang tìm kiếm, mọi danh mục có kết quả đều mở sẵn
-                        const isOpen = isSearching || openCategory === group.name
-                        return (
+                      <>
+                        {/* Danh mục: tên + tổng số lượng; bấm để mở/đóng các sản phẩm bên trong */}
+                        {groups.map((group, index) => (
                           <Fragment key={group.name}>
-                            <tr className="border-b hover:bg-gray-50">
-                              <td className="py-3 px-4 text-center text-gray-600">{index + 1}</td>
-                              <td className="py-3 px-4">
+                            <tr className={`border-b ${isOpen(group.name) ? 'bg-blue-100 hover:bg-blue-100' : 'bg-white hover:bg-gray-50'}`}>
+                              <td className={`py-3 px-4 text-center text-gray-600 border-l-4 ${isOpen(group.name) ? 'border-l-blue-500' : 'border-l-transparent'}`}>{index + 1}</td>
+                              <td colSpan={2} className="py-3 px-4">
                                 <button
-                                  onClick={() => setOpenCategory(prev => prev === group.name ? null : group.name)}
-                                  className="flex items-center gap-2 font-medium text-gray-800 hover:text-blue-600"
-                                  title={isOpen ? 'Thu gọn' : 'Mở rộng'}
+                                  onClick={() => toggle(group.name)}
+                                  className="flex items-center gap-2 font-semibold text-gray-800 hover:text-blue-600"
+                                  title={isOpen(group.name) ? 'Thu gọn' : 'Mở rộng'}
                                 >
-                                  {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                                  {isOpen(group.name) ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                                   {group.name}
                                 </button>
                               </td>
-                              <td className="py-3 px-4 text-right font-medium text-gray-800">{group.total.toLocaleString()}</td>
+                              <td className="py-3 px-4 text-right font-semibold text-gray-800">{group.total.toLocaleString()}</td>
+                              <td colSpan={2} />
                             </tr>
-                            {isOpen && (
-                              <tr>
-                                <td colSpan={3} className="p-0">
-                                  <div className="bg-gray-50 p-4">
-                                    <table className="w-full text-sm">
-                                      <thead>
-                                        <tr className="bg-gray-200">
-                                          <th className="text-center py-2 px-4 font-semibold text-gray-700 w-16">STT</th>
-                                          <th className="text-left py-2 px-4 font-semibold text-gray-700">Mã Hàng</th>
-                                          <th className="text-left py-2 px-4 font-semibold text-gray-700">Tên Hàng</th>
-                                          <th className="text-right py-2 px-4 font-semibold text-gray-700">Số Lượng</th>
-                                          <th className="text-center py-2 px-4 font-semibold text-gray-700">Có Hình Ảnh</th>
-                                          <th className="text-center py-2 px-4 font-semibold text-gray-700">Thông Tin</th>
-                                        </tr>
-                                      </thead>
-                                      <tbody>
-                                        {group.items.map((item, i) => (
-                                          <tr key={item.id} className="border-b border-gray-200 hover:bg-white">
-                                            <td className="py-3 px-4 text-center text-gray-600">{i + 1}</td>
-                                            <td className="py-3 px-4"><span className="font-mono font-medium text-blue-600">{item.code}</span></td>
-                                            <td className="py-3 px-4"><p className="font-medium text-gray-800">{item.name}</p></td>
-                                            <td className="py-3 px-4 text-right font-medium text-gray-800">{item.quantity.toLocaleString()} {item.unit}</td>
-                                            <td className="py-3 px-4 text-center">
-                                              <Checkbox checked={!!item.productImage} disabled />
-                                            </td>
-                                            <td className="py-3 px-4 text-center">
-                                              <Button variant="ghost" size="sm" onClick={() => handleViewDetail(item)} className="hover:bg-blue-100 text-blue-600"><Eye className="h-4 w-4 mr-1" /> Xem</Button>
-                                            </td>
-                                          </tr>
-                                        ))}
-                                      </tbody>
-                                    </table>
-                                  </div>
-                                </td>
-                              </tr>
-                            )}
+                            {isOpen(group.name) &&
+                              group.items.map((item, i) => (
+                                <ProductRow key={item.id} item={item} index={i + 1} nested onView={setSelectedProduct} />
+                              ))}
                           </Fragment>
-                        )
-                      })
+                        ))}
+
+                        {/* Sản phẩm không có danh mục */}
+                        {standalone.map((item, i) => (
+                          <ProductRow key={item.id} item={item} index={groups.length + i + 1} onView={setSelectedProduct} />
+                        ))}
+                      </>
                     )}
                   </tbody>
                 </table>
@@ -202,68 +181,96 @@ export default function InventoryPage() {
             </CardContent>
           </Card>
 
-          {/* Detail Modal - Popup thông tin sản phẩm (mở rộng, bo tròn, có ảnh) */}
-          {isDetailModalOpen && selectedProduct && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-              <div className="bg-white rounded-2xl p-6 w-full max-w-2xl shadow-2xl max-h-[90vh] overflow-y-auto border-2 border-sky-100">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-xl font-bold text-gray-800">Thông Tin Sản Phẩm</h2>
-                  <button onClick={() => setIsDetailModalOpen(false)} className="p-1 hover:bg-gray-100 rounded-lg"><X className="w-5 h-5 text-gray-500" /></button>
-                </div>
-                {/* Tên + Mã sản phẩm */}
-                <div className="mb-4 p-4 bg-sky-50 rounded-xl border border-sky-200">
-                  <p className="text-lg font-bold text-gray-800">{selectedProduct.name}</p>
-                  <p className="text-sm font-mono text-sky-600">{selectedProduct.code}</p>
-                </div>
-                {/* Ảnh sản phẩm */}
-                {selectedProduct.productImage && (
-                  <div className="mb-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-sm text-gray-500">📷 Hình ảnh sản phẩm</p>
-                      <Button variant="ghost" size="sm" onClick={() => setLightboxImage({ src: selectedProduct.productImage, alt: selectedProduct.name })} className="text-blue-600 hover:bg-blue-100"><Maximize2 className="h-4 w-4 mr-1" /> Xem ảnh</Button>
-                    </div>
-                    <img src={selectedProduct.productImage} alt={selectedProduct.name} className="w-full h-64 object-cover rounded-xl border-2 border-blue-200" />
-                  </div>
-                )}
-                {/* Ảnh vị trí */}
-                {selectedProduct.locationImage && (
-                  <div className="mb-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-sm text-gray-500">📍 Ảnh vị trí kho</p>
-                      <Button variant="ghost" size="sm" onClick={() => setLightboxImage({ src: selectedProduct.locationImage, alt: 'Vị trí' })} className="text-blue-600 hover:bg-blue-100"><Maximize2 className="h-4 w-4 mr-1" /> Xem ảnh</Button>
-                    </div>
-                    <img src={selectedProduct.locationImage} alt="Vị trí" className="w-full h-48 object-cover rounded-xl border-2 border-gray-200" />
-                  </div>
-                )}
-                {/* Chi tiết */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="p-3 bg-gray-50 rounded-xl"><p className="text-sm text-gray-500 mb-1">Đơn vị tính</p><p className="font-medium">{selectedProduct.unit}</p></div>
-                  <div className="p-3 bg-gray-50 rounded-xl"><p className="text-sm text-gray-500 mb-1">Số lượng tồn</p><p className="font-bold text-green-600">{selectedProduct.quantity.toLocaleString()} {selectedProduct.unit}</p></div>
-                  <div className="p-3 bg-gray-50 rounded-xl"><p className="text-sm text-gray-500 mb-1">Khối lượng</p><p className="font-medium">{selectedProduct.weight} - {selectedProduct.weightUnit}</p></div>
-                  <div className="p-3 bg-gray-50 rounded-xl"><p className="text-sm text-gray-500 mb-1">Vị trí</p><p className="font-medium">{selectedProduct.location}</p></div>
-                  <div className="p-3 bg-gray-50 rounded-xl col-span-2"><p className="text-sm text-gray-500 mb-1">Ngày nhập liệu</p><p className="font-medium">{selectedProduct.importDate}</p></div>
-                </div>
-                <div className="flex gap-3 mt-6"><Button variant="outline" onClick={() => setIsDetailModalOpen(false)} className="flex-1">Đóng</Button></div>
-              </div>
-            </div>
+          {selectedProduct && (
+            <DetailModal product={selectedProduct} onClose={() => setSelectedProduct(null)} onZoom={setLightbox} />
           )}
-
-          {/* Lightbox xem ảnh toàn bộ (bấm nền / X / Esc để đóng) */}
-          {isDetailModalOpen && lightboxImage && (
-            <div className="fixed inset-0 z-[60] bg-black/90 flex items-center justify-center p-4" onClick={() => setLightboxImage(null)}>
-              <button onClick={() => setLightboxImage(null)} className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-lg" title="Đóng">
-                <X className="w-6 h-6 text-white" />
-              </button>
-              <img
-                src={lightboxImage.src}
-                alt={lightboxImage.alt}
-                className="max-w-full max-h-full object-contain"
-                onClick={(e) => e.stopPropagation()}
-              />
-            </div>
-          )}
+          {selectedProduct && lightbox && <ImageLightbox image={lightbox} onClose={() => setLightbox(null)} />}
         </div>
       </div>
+    </div>
+  )
+}
+
+function ProductRow({ item, index, nested = false, onView }: { item: Product; index: number; nested?: boolean; onView: (p: Product) => void }) {
+  return (
+    <tr className={`border-b ${nested ? 'bg-blue-50 border-blue-100 hover:bg-blue-100/70' : 'hover:bg-gray-50'}`}>
+      <td className={`py-3 px-4 text-center text-gray-600 ${nested ? 'border-l-4 border-l-blue-500' : ''}`}>{index}</td>
+      <td className={`py-3 font-mono font-medium text-blue-600 ${nested ? 'pl-10 pr-4' : 'px-4'}`}>{item.code}</td>
+      <td className="py-3 px-4 font-medium text-gray-800">{item.name}</td>
+      <td className="py-3 px-4 text-right font-medium text-gray-800">{item.quantity.toLocaleString()} {item.unit}</td>
+      <td className="py-3 px-4 text-center"><Checkbox checked={!!item.productImage} disabled /></td>
+      <td className="py-3 px-4 text-center">
+        <Button variant="ghost" size="sm" onClick={() => onView(item)} className="hover:bg-blue-100 text-blue-600">
+          <Eye className="h-4 w-4 mr-1" /> Xem
+        </Button>
+      </td>
+    </tr>
+  )
+}
+
+function DetailModal({ product, onClose, onZoom }: { product: Product; onClose: () => void; onZoom: (image: Lightbox) => void }) {
+  const images = [
+    { src: product.productImage, label: '📷 Hình ảnh sản phẩm', alt: product.name, className: 'h-64 border-blue-200' },
+    { src: product.locationImage, label: '📍 Ảnh vị trí kho', alt: 'Vị trí', className: 'h-48 border-gray-200' },
+  ]
+  const fields = [
+    { label: 'Đơn vị tính', value: product.unit },
+    { label: 'Số lượng tồn', value: `${product.quantity.toLocaleString()} ${product.unit}`, className: 'font-bold text-green-600' },
+    { label: 'Khối lượng', value: `${product.weight} - ${product.weightUnit}` },
+    { label: 'Vị trí', value: product.location },
+    { label: 'Ngày nhập liệu', value: product.importDate, wide: true },
+  ]
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl p-6 w-full max-w-2xl shadow-2xl max-h-[90vh] overflow-y-auto border-2 border-sky-100">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-bold text-gray-800">Thông Tin Sản Phẩm</h2>
+          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-lg"><X className="w-5 h-5 text-gray-500" /></button>
+        </div>
+
+        <div className="mb-4 p-4 bg-sky-50 rounded-xl border border-sky-200">
+          <p className="text-lg font-bold text-gray-800">{product.name}</p>
+          <p className="text-sm font-mono text-sky-600">{product.code}</p>
+        </div>
+
+        {images.map(({ src, label, alt, className }) =>
+          src ? (
+            <div key={label} className="mb-4">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm text-gray-500">{label}</p>
+                <Button variant="ghost" size="sm" onClick={() => onZoom({ src, alt })} className="text-blue-600 hover:bg-blue-100">
+                  <Maximize2 className="h-4 w-4 mr-1" /> Xem ảnh
+                </Button>
+              </div>
+              <img src={src} alt={alt} className={`w-full object-cover rounded-xl border-2 ${className}`} />
+            </div>
+          ) : null
+        )}
+
+        <div className="grid grid-cols-2 gap-4">
+          {fields.map(({ label, value, className, wide }) => (
+            <div key={label} className={`p-3 bg-gray-50 rounded-xl ${wide ? 'col-span-2' : ''}`}>
+              <p className="text-sm text-gray-500 mb-1">{label}</p>
+              <p className={className || 'font-medium'}>{value}</p>
+            </div>
+          ))}
+        </div>
+
+        <Button variant="outline" onClick={onClose} className="w-full mt-6">Đóng</Button>
+      </div>
+    </div>
+  )
+}
+
+// Xem ảnh toàn bộ (bấm nền / X / Esc để đóng)
+function ImageLightbox({ image, onClose }: { image: Lightbox; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-[60] bg-black/90 flex items-center justify-center p-4" onClick={onClose}>
+      <button onClick={onClose} className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-lg" title="Đóng">
+        <X className="w-6 h-6 text-white" />
+      </button>
+      <img src={image.src} alt={image.alt} className="max-w-full max-h-full object-contain" onClick={(e) => e.stopPropagation()} />
     </div>
   )
 }
