@@ -211,31 +211,44 @@ Shared shell via `components/sidebar.tsx`. All Supabase access via `lib/db.ts`.
 - Files: `app/warehouse/page.tsx` (+ this spec). No `lib/db.ts` change.
 - Files: only `app/warehouse/page.tsx` (+ this spec).
 
-## Feature: "Danh mục" (category_name) — mandatory in both forms
+## Feature: "Danh mục" (category_name) — optional via "Có danh mục" checkbox (both forms)
 - DB column already exists: `products.category_name VARCHAR(200) NOT NULL`
-  (`supabase/schema.sql`). No schema change. Before this feature the code omitted it, so
-  `createProduct` violated NOT NULL; this feature also fixes that.
-- `lib/constants.ts`: `Product` gains `categoryName: string` (non-optional).
-- `lib/db.ts`: `mapProductFromDB` maps `categoryName: row.category_name || ''`;
-  `createProduct` inserts `category_name: product.categoryName`;
-  `updateProduct` maps `category_name` when `updates.categoryName !== undefined`.
-- `app/warehouse/page.tsx`, BOTH forms:
-  - `formData` (Nhập Liệu) and `editFormData` (Sửa Sản Phẩm Tồn Kho) gain
-    `categoryName: ''`; reset in `handleImport` / `handleEdit` (`handleEdit` copies
-    `product.categoryName`).
-  - UI: plain `<Input>` (free text — no dropdown, no category table), label
-    `Danh mục *`, placed immediately AFTER `Tên hàng` in both modals.
-  - Validation: empty / whitespace-only -> inline red error
-    `Vui lòng nhập danh mục` (`border-red-500 bg-red-50` + `⚠️ ... <p>`, same pattern as
-    the other mandatory fields), blocks save before any DB call. Import form becomes
-    9 mandatory fields; edit form becomes 8.
+  (`supabase/schema.sql`). No schema change: "no category" is stored as `''`, which
+  satisfies `NOT NULL`. Downstream already tolerates it — inventory groups
+  empty/whitespace under `Chưa phân loại` (`docs/specs/inventory.md`).
+- `lib/constants.ts`: `Product.categoryName: string` (non-optional). `lib/db.ts`:
+  `mapProductFromDB` maps `categoryName: row.category_name || ''`; `createProduct` inserts
+  `category_name: product.categoryName`; `updateProduct` maps `category_name` when
+  `updates.categoryName !== undefined`. Unchanged by this feature.
+- `app/warehouse/page.tsx`, BOTH forms (`Nhập Liệu` = `formData`,
+  `Sửa Sản Phẩm Tồn Kho` = `editFormData`), mirroring the `Chưa rõ` weight checkbox:
+  - Plain free-text `<Input>` (no dropdown, no category table), placed immediately AFTER
+    `Tên hàng` in both modals.
+  - State: `hasCategory` (import) resets to `false` in `handleImport`; `editHasCategory`
+    (edit) is set in `handleEdit` to `!!product.categoryName.trim()`, so an existing
+    category always opens ticked and is never silently wiped.
+  - UI: `<Checkbox>` + label `Có danh mục` on the right of the `Danh mục` label row
+    (`flex items-center justify-between`, `cursor-pointer`), same layout as `Chưa rõ`.
+    The required asterisk renders only while ticked (`Danh mục *`), never when optional.
+  - Untick: `categoryName = ''`, the `<Input>` gets `disabled` plus
+    `bg-gray-100 cursor-not-allowed`, and `formErrors.categoryName` /
+    `editFormErrors.categoryName` is cleared.
+  - Tick: input re-enabled and empty, ready to type.
+  - Validation: `validateForm()` / `validateEditForm()` check `categoryName` only when the
+    box is ticked; empty / whitespace-only then yields the same inline red
+    `Vui lòng nhập danh mục` (`border-red-500 bg-red-50` + `⚠️ ... <p>`), blocking save
+    before any DB call. Mandatory field count: import 8 (9 when ticked), edit 7
+    (8 when ticked).
   - Errors clear live on `onChange` (`clearFieldError` / `clearEditFieldError`).
-  - Edit history diff adds `Danh mục: {old} → {new}` when changed.
-- Existing rows: a product whose `category_name` is empty opens the edit modal with an
-  empty field and must be filled before saving (mandatory applies to edits too).
-- Out of scope (approved): no `Danh Mục` column in the warehouse product table, no change
-  to inventory detail modal, Xuất kho / Nhập kho modals, history page, or Excel export.
-- Files: `app/warehouse/page.tsx`, `lib/db.ts`, `lib/constants.ts` (+ this spec).
+  - Edit history diff: `Danh mục: {old} → {new}` when changed, rendering `(trống)` for an
+    empty side (unticked box).
+- Existing rows: a product whose `category_name` is empty opens the edit modal UNticked
+  with the field disabled; ticking it makes it mandatory again.
+- Save: unchanged code paths — `categoryName: ''` flows through the existing mappers.
+- Out of scope (approved): no `Danh Mục` column in the warehouse product table, no dropdown
+  or category table, no `NULL`-able column migration, no change to inventory detail modal,
+  Xuất kho / Nhập kho modals, history page, or Excel export.
+- Files: `app/warehouse/page.tsx` (+ this spec, + plan).
 
 ## Validation Rules
 - Empty = `''`, `null`, `undefined`, or whitespace-only for strings.
@@ -310,12 +323,23 @@ Shared shell via `components/sidebar.tsx`. All Supabase access via `lib/db.ts`.
 32. `npm run build` passes.
 
 ## Manual Test Checklist ("Danh mục" field)
-33. Nhập Liệu: leave `Danh mục *` empty -> Save -> red `Vui lòng nhập danh mục`,
-    no DB call, no history row. Type -> red clears live.
-34. Nhập Liệu: fill all 9 mandatory fields -> Save succeeds; row persists with the
-    entered category (reopen Sửa for that product -> same value shown).
-35. Sửa Sản Phẩm Tồn Kho: clear `Danh mục *` -> `Cập Nhật` blocked with red; retype ->
-    allowed. Change the value -> history row contains `Danh mục: {old} → {new}`.
-36. Open Sửa on a product with empty `category_name` -> field empty -> must fill before
-    `Cập Nhật` passes.
-37. `npm run build` passes.
+33. Nhập Liệu: `Có danh mục` is UNticked on open; the `Danh mục` input is greyed out and
+    unfocusable and the label has NO `*`. Fill everything else -> Save succeeds and the
+    row persists with an empty category (inventory shows it under `Chưa phân loại`).
+34. Nhập Liệu: tick `Có danh mục` -> input enabled, label becomes `Danh mục *`; Save with
+    it empty -> red `Vui lòng nhập danh mục`, no DB call, no history row. Type -> red
+    clears live.
+35. Nhập Liệu: tick + type a category -> Save succeeds; reopen Sửa for that product ->
+    box ticked with the same value.
+36. Nhập Liệu: tick, type, then untick -> input clears to empty and is disabled; Save ->
+    product stored with an empty category.
+37. Sửa Sản Phẩm Tồn Kho: a product WITH a category opens ticked; keep it -> `Cập Nhật`
+    allowed. Clear the field -> blocked with red; change the value -> history row contains
+    `Danh mục: {old} → {new}`.
+38. Sửa: untick `Có danh mục` on a product that had one -> `Cập Nhật` succeeds, field
+    disabled, history reads `Danh mục: {old} → (trống)`.
+39. Sửa: open a product with empty `category_name` -> box UNticked, field disabled; tick
+    it -> must fill before `Cập Nhật` passes.
+40. Closing and reopening either modal resets the box (Nhập Liệu unticked, Sửa derived
+    from the product).
+41. `npm run build` passes.

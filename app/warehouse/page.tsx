@@ -63,6 +63,9 @@ export default function WarehousePage() {
   // Checkbox "Chưa rõ": khối lượng chưa xác định -> 0 kg và khóa 2 ô nhập
   const [weightUnknown, setWeightUnknown] = useState(false)
 
+  // Checkbox "Có danh mục": tick -> Danh mục bắt buộc; bỏ tick -> lưu chuỗi rỗng
+  const [hasCategory, setHasCategory] = useState(false)
+
   // Xóa lỗi đỏ của 1 ô khi user bắt đầu sửa
   const clearFieldError = (field: keyof typeof formErrors) => {
     setFormErrors((prev) => {
@@ -86,12 +89,20 @@ export default function WarehousePage() {
     })
   }
 
+  // Tick "Có danh mục" -> mở ô nhập + bắt buộc; bỏ tick -> xóa trắng, khóa ô, bỏ bắt buộc
+  const handleToggleHasCategory = (checked: boolean) => {
+    setHasCategory(checked)
+    if (checked) return
+    setFormData({ ...formData, categoryName: '' })
+    clearFieldError('categoryName')
+  }
+
   // Kiểm tra 8 trường bắt buộc, trả về object lỗi (rỗng = hợp lệ)
   const validateForm = () => {
     const errors: typeof formErrors = {}
     if (!String(formData.code || '').trim()) errors.code = 'Vui lòng nhập mã hàng'
     if (!String(formData.name || '').trim()) errors.name = 'Vui lòng nhập tên hàng'
-    if (!String(formData.categoryName || '').trim()) errors.categoryName = 'Vui lòng nhập danh mục'
+    if (hasCategory && !String(formData.categoryName || '').trim()) errors.categoryName = 'Vui lòng nhập danh mục'
     if (!String(formData.unit || '').trim()) errors.unit = 'Vui lòng nhập đơn vị tính'
     if (formData.quantity === '' || formData.quantity === null || formData.quantity === undefined || Number(formData.quantity) <= 0) errors.quantity = 'Vui lòng nhập số lượng lớn hơn 0'
     if (!weightUnknown) {
@@ -214,6 +225,9 @@ export default function WarehousePage() {
   // Checkbox "Chưa rõ" cho form Sửa (khối lượng 0 kg = chưa xác định)
   const [editWeightUnknown, setEditWeightUnknown] = useState(false)
 
+  // Checkbox "Có danh mục" cho form Sửa
+  const [editHasCategory, setEditHasCategory] = useState(false)
+
   // Xóa lỗi đỏ của 1 ô khi user bắt đầu sửa
   const clearEditFieldError = (field: keyof typeof editFormErrors) => {
     setEditFormErrors((prev) => {
@@ -237,12 +251,20 @@ export default function WarehousePage() {
     })
   }
 
+  // Tick "Có danh mục" -> mở ô nhập + bắt buộc (form Sửa)
+  const handleToggleEditHasCategory = (checked: boolean) => {
+    setEditHasCategory(checked)
+    if (checked) return
+    setEditFormData({ ...editFormData, categoryName: '' })
+    clearEditFieldError('categoryName')
+  }
+
   // Kiểm tra 7 trường bắt buộc, trả về object lỗi (rỗng = hợp lệ)
   const validateEditForm = () => {
     const errors: typeof editFormErrors = {}
     if (!String(editFormData.code || '').trim()) errors.code = 'Vui lòng nhập mã hàng'
     if (!String(editFormData.name || '').trim()) errors.name = 'Vui lòng nhập tên hàng'
-    if (!String(editFormData.categoryName || '').trim()) errors.categoryName = 'Vui lòng nhập danh mục'
+    if (editHasCategory && !String(editFormData.categoryName || '').trim()) errors.categoryName = 'Vui lòng nhập danh mục'
     if (!String(editFormData.unit || '').trim()) errors.unit = 'Vui lòng nhập đơn vị tính'
     if (!editWeightUnknown) {
       if (!editFormData.weight || Number(editFormData.weight) <= 0) errors.weight = 'Vui lòng nhập khối lượng lớn hơn 0'
@@ -377,6 +399,7 @@ export default function WarehousePage() {
     setIsSaving(false)
     setFormErrors({})
     setWeightUnknown(false)
+    setHasCategory(false)
     setFormData({ code: '', name: '', categoryName: '', unit: '', quantity: '', weight: '', weightUnit: 'kg', location: '', locationImage: '', productImage: '', importDate: new Date().toISOString().split('T')[0] })
     setProductImageFile(null)
     setLocationImageFile(null)
@@ -500,6 +523,8 @@ export default function WarehousePage() {
     // Khối lượng <= 0 coi là "chưa rõ" -> tick sẵn checkbox, chuẩn hóa 0 kg
     const unknown = !(Number(product.weight) > 0)
     setEditWeightUnknown(unknown)
+    // Danh mục đã có sẵn -> tick sẵn để không xóa mất dữ liệu khi lưu
+    setEditHasCategory(!!(product.categoryName || '').trim())
     setEditFormData({
       code: product.code,
       name: product.name,
@@ -573,7 +598,7 @@ export default function WarehousePage() {
     if (old) {
       if (old.weight !== editFormData.weight || (old.weightUnit || 'kg') !== editFormData.weightUnit) changes.push(`Khối lượng: ${old.weight} - ${old.weightUnit || 'kg'} → ${editFormData.weight} - ${editFormData.weightUnit}`)
       if (old.name !== editFormData.name) changes.push(`Tên: ${old.name} → ${editFormData.name}`)
-      if (old.categoryName !== editFormData.categoryName) changes.push(`Danh mục: ${old.categoryName} → ${editFormData.categoryName}`)
+      if (old.categoryName !== editFormData.categoryName) changes.push(`Danh mục: ${old.categoryName || '(trống)'} → ${editFormData.categoryName || '(trống)'}`)
       if (old.location !== editFormData.location) changes.push(`Vị trí: ${old.location} → ${editFormData.location}`)
       if (old.locationImage !== locationImageUrl) changes.push('Ảnh vị trí: đã cập nhật')
       if ((old.productImage || '') !== productImageUrl) changes.push('Ảnh sản phẩm: đã cập nhật')
@@ -929,11 +954,18 @@ export default function WarehousePage() {
 
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Danh mục *</label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-sm font-medium text-gray-700">Danh mục {hasCategory && '*'}</label>
+                      <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
+                        <Checkbox checked={hasCategory} onCheckedChange={(v) => handleToggleHasCategory(!!v)} />
+                        Có danh mục
+                      </label>
+                    </div>
                     <Input
                       value={formData.categoryName}
                       onChange={(e) => { setFormData({ ...formData, categoryName: e.target.value }); clearFieldError('categoryName') }}
-                      className={`border-2 ${formErrors.categoryName ? 'border-red-500 bg-red-50 focus:ring-red-400' : ''}`}
+                      disabled={!hasCategory}
+                      className={`border-2 ${formErrors.categoryName ? 'border-red-500 bg-red-50 focus:ring-red-400' : ''} ${!hasCategory ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                     />
                     {formErrors.categoryName && (
                       <p className="text-red-600 text-xs mt-1 font-medium">⚠️ {formErrors.categoryName}</p>
@@ -1147,7 +1179,17 @@ export default function WarehousePage() {
                   ⚠️ Lưu ý: Số lượng tồn kho KHÔNG được phép thay đổi tại đây.
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Danh mục *</label><Input value={editFormData.categoryName} onChange={(e) => { setEditFormData({ ...editFormData, categoryName: e.target.value }); clearEditFieldError('categoryName') }} className={`border-2 ${editFormErrors.categoryName ? 'border-red-500 bg-red-50' : ''}`} />{editFormErrors.categoryName && (<p className="text-red-600 text-xs mt-1 font-medium">⚠️ {editFormErrors.categoryName}</p>)}</div>
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-sm font-medium text-gray-700">Danh mục {editHasCategory && '*'}</label>
+                      <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
+                        <Checkbox checked={editHasCategory} onCheckedChange={(v) => handleToggleEditHasCategory(!!v)} />
+                        Có danh mục
+                      </label>
+                    </div>
+                    <Input value={editFormData.categoryName} onChange={(e) => { setEditFormData({ ...editFormData, categoryName: e.target.value }); clearEditFieldError('categoryName') }} disabled={!editHasCategory} className={`border-2 ${editFormErrors.categoryName ? 'border-red-500 bg-red-50' : ''} ${!editHasCategory ? 'bg-gray-100 cursor-not-allowed' : ''}`} />
+                    {editFormErrors.categoryName && (<p className="text-red-600 text-xs mt-1 font-medium">⚠️ {editFormErrors.categoryName}</p>)}
+                  </div>
                   <div><label className="block text-sm font-medium text-gray-700 mb-1">Mã hàng *</label><Input value={editFormData.code} onChange={(e) => { setEditFormData({ ...editFormData, code: e.target.value }); clearEditFieldError('code') }} className={`border-2 ${editDuplicateCode || editFormErrors.code ? 'border-red-500 bg-red-50' : ''}`} />{editCheckingCode && !editDuplicateCode && !editFormErrors.code && (<p className="text-gray-500 text-xs mt-1">Đang kiểm tra...</p>)}{editDuplicateCode && (<p className="text-red-600 text-xs mt-1 font-medium">⚠️ Mã hàng này đã tồn tại trong kho này. Vui lòng kiểm tra lại</p>)}{editFormErrors.code && (<p className="text-red-600 text-xs mt-1 font-medium">⚠️ {editFormErrors.code}</p>)}</div>
                   <div><label className="block text-sm font-medium text-gray-700 mb-1">Tên hàng *</label><Input value={editFormData.name} onChange={(e) => { setEditFormData({ ...editFormData, name: e.target.value }); clearEditFieldError('name') }} className={`border-2 ${editDuplicateName || editFormErrors.name ? 'border-red-500 bg-red-50' : ''}`} />{editCheckingName && !editDuplicateName && !editFormErrors.name && (<p className="text-gray-500 text-xs mt-1">Đang kiểm tra...</p>)}{editDuplicateName && (<p className="text-red-600 text-xs mt-1 font-medium">⚠️ Tên hàng này đã tồn tại trong kho này. Vui lòng kiểm tra lại</p>)}{editFormErrors.name && (<p className="text-red-600 text-xs mt-1 font-medium">⚠️ {editFormErrors.name}</p>)}</div>
                   <div><label className="block text-sm font-medium text-gray-700 mb-1">Đơn vị tính *</label><Input value={editFormData.unit} onChange={(e) => { setEditFormData({ ...editFormData, unit: e.target.value }); clearEditFieldError('unit') }} className={`border-2 ${editFormErrors.unit ? 'border-red-500 bg-red-50' : ''}`} />{editFormErrors.unit && (<p className="text-red-600 text-xs mt-1 font-medium">⚠️ {editFormErrors.unit}</p>)}</div>

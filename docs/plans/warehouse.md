@@ -379,3 +379,82 @@ No test framework in repo: verification = `npm run build` + spec manual checklis
 ### Scope Guard
 - No `Danh Mục` table column, no inventory detail row, no Xuất kho / Nhập kho / history / Excel changes.
 - No schema migration, no new dependency, no category list constant.
+
+## Plan: "Có danh mục" checkbox makes category_name optional (both forms) (English)
+
+Goal: spec `docs/specs/warehouse.md` section `"Danh mục" (category_name) — optional via
+"Có danh mục" checkbox (both forms)`. Checkbox UNticked by default; ticked -> field
+required. No `lib/*` or schema change: `''` already satisfies `category_name NOT NULL` and
+flows through the existing mappers.
+
+Reference lines (verify before editing): `formData` 40-53, `formErrors` 59,
+`weightUnknown` 64, `clearFieldError` 67-75, `handleToggleWeightUnknown` 77-87,
+`validateForm` 90-105, `handleImport` 374-385, import `Danh mục` block 930-943,
+weight toggle row (layout to copy) 1005-1012; `editFormData` 200-202, `editFormErrors`
+209-212, `editWeightUnknown` 215, `handleToggleEditWeightUnknown` 228-238,
+`validateEditForm` 241-256, `handleEdit` 495-522, `handleSaveEdit` diff 576,
+edit `Danh mục` block 1150.
+
+No test framework in repo: verification = `npm run build` + spec manual checklist 33-41.
+
+### Task 1: State + toggle handlers (both forms)
+
+**Files:** Modify `app/warehouse/page.tsx`
+
+- [ ] **Step 1:** Next to `weightUnknown` (line 64) add
+      `// Checkbox "Có danh mục": tick -> Danh mục bắt buộc; bỏ tick -> lưu chuỗi rỗng`
+      + `const [hasCategory, setHasCategory] = useState(false)`.
+- [ ] **Step 2:** Next to `editWeightUnknown` (line 215) add `const [editHasCategory, setEditHasCategory] = useState(false)`.
+- [ ] **Step 3:** After `handleToggleWeightUnknown` add `handleToggleHasCategory(checked)`:
+      `setHasCategory(checked)`; when `!checked` also `setFormData({ ...formData, categoryName: '' })`
+      + `clearFieldError('categoryName')`; when `checked` keep any typed value.
+- [ ] **Step 4:** After `handleToggleEditWeightUnknown` add `handleToggleEditHasCategory(checked)`
+      with the same shape on `editFormData` / `clearEditFieldError('categoryName')`.
+- [ ] **Step 5:** `handleImport()`: add `setHasCategory(false)` next to `setWeightUnknown(false)`.
+- [ ] **Step 6:** `handleEdit()`: add `setEditHasCategory(!!(product.categoryName || '').trim())` next to `setEditWeightUnknown(unknown)`.
+
+### Task 2: Validation (conditional)
+
+**Files:** Modify `app/warehouse/page.tsx`
+
+- [ ] **Step 1:** `validateForm()` line 94 -> `if (hasCategory && !String(formData.categoryName || '').trim()) errors.categoryName = 'Vui lòng nhập danh mục'`.
+- [ ] **Step 2:** `validateEditForm()` line 245 -> same guard with `editHasCategory` / `editFormData`.
+
+### Task 3: Nhập Liệu JSX
+
+**Files:** Modify `app/warehouse/page.tsx` (lines 930-943)
+
+- [ ] **Step 1:** Replace the `Danh mục *` `<label>` with the toggle row copied from the weight block:
+      `<div className="flex items-center justify-between mb-1">` containing
+      `<label ...>Danh mục {hasCategory && '*'}</label>` and
+      `<label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer"><Checkbox checked={hasCategory} onCheckedChange={(v) => handleToggleHasCategory(!!v)} />Có danh mục</label>`.
+- [ ] **Step 2:** Existing `<Input>`: keep `value`/`onChange`/red class, add
+      `disabled={!hasCategory}` and append `${!hasCategory ? 'bg-gray-100 cursor-not-allowed' : ''}`.
+- [ ] **Step 3:** Keep the red `⚠️ {formErrors.categoryName}` `<p>` unchanged.
+
+### Task 4: Sửa Sản Phẩm Tồn Kho JSX
+
+**Files:** Modify `app/warehouse/page.tsx` (line 1150)
+
+- [ ] **Step 1:** Expand the one-line `<div>` into a multi-line block with the same toggle row
+      (`editHasCategory` / `handleToggleEditHasCategory`), `disabled={!editHasCategory}` on the
+      `<Input>`, grey class, red `<p>` unchanged. Grid is 2-col, so it reflows on its own.
+
+### Task 5: Edit history diff
+
+**Files:** Modify `app/warehouse/page.tsx` (line 576)
+
+- [ ] **Step 1:** `if (old.categoryName !== editFormData.categoryName) changes.push(`Danh mục: ${old.categoryName || '(trống)'} → ${editFormData.categoryName || '(trống)'}`)`.
+
+### Task 6: Verify + commit
+
+- [ ] **Step 1:** `npm run build` clean; re-read the diff for type slips (build ignores TS).
+- [ ] **Step 2:** Manual checklist items 33-41 in `docs/specs/warehouse.md`.
+- [ ] **Step 3:** Confirm save paths need no change: `createProduct({ ...formData, ... })` and
+      `updateProduct(editingProduct.id, { ...editFormData, ... })` carry `categoryName: ''`.
+- [ ] **Step 4:** Commit: `git add app/warehouse/page.tsx docs/specs/warehouse.md docs/plans/warehouse.md`
+      → `feat: make product category optional via "Có danh mục" checkbox`.
+
+### Scope Guard
+- No `lib/db.ts`, `lib/constants.ts`, schema, inventory, history, Xuất kho / Nhập kho, or Excel changes.
+- No dropdown, no category table, no `NULL`-able column, no new dependency.
