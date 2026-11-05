@@ -458,3 +458,89 @@ No test framework in repo: verification = `npm run build` + spec manual checklis
 ### Scope Guard
 - No `lib/db.ts`, `lib/constants.ts`, schema, inventory, history, Xuất kho / Nhập kho, or Excel changes.
 - No dropdown, no category table, no `NULL`-able column, no new dependency.
+
+## Plan: Decimal Quantity — 2 decimal places (English)
+
+Goal: spec `docs/specs/warehouse.md` section "Decimal Quantity (2 decimal places)".
+Quantity accepts `1.3`, `1.5`, `1.25` in import, export, and addmore; stored as
+`NUMERIC(12,2)`. No new dependency, component, or helper — the existing `Khối lượng`
+decimal-input pattern is reused.
+
+Reference lines (verify before editing): schema `products.quantity` line 28,
+`history_log.quantity` line 49; mappers `lib/db.ts:314-342`; import quantity input
+`app/warehouse/page.tsx:1024-1036`; export input `1323-1329`; addmore input `1420-1426`;
+export subtraction `478`; addmore addition `501`; weight decimal pattern `1048-1052`.
+
+No test framework in repo: verification = `npm run build` + manual checklist in the spec.
+
+### Task 1: Schema + one-time migration
+
+**Files:** Modify `supabase/schema.sql`
+
+- [x] **Step 1:** `products.quantity INTEGER DEFAULT 0` -> `quantity NUMERIC(12,2) DEFAULT 0`.
+- [x] **Step 2:** `history_log.quantity INTEGER DEFAULT 0` -> `quantity NUMERIC(12,2) DEFAULT 0`.
+- [x] **Step 3:** In the existing "MIGRATION 1 LẦN" section, add the two
+      `ALTER TABLE ... ALTER COLUMN quantity TYPE NUMERIC(12,2) USING quantity::numeric;`
+      statements, **commented out** with a note to run them separately (running the
+      whole file again aborts at the existing `CREATE POLICY` before reaching them).
+
+### Task 2: Map numeric safely to JS number
+
+**Files:** Modify `lib/db.ts`
+
+- [x] **Step 1:** `mapProductFromDB`: `quantity: row.quantity || 0` ->
+      `quantity: parseFloat(row.quantity) || 0` (same as the `weight` line).
+- [x] **Step 2:** `mapHistoryFromDB`: `quantity: row.quantity || 0` ->
+      `quantity: parseFloat(row.quantity) || 0`.
+- [x] **Step 3:** No change to `createProduct` / `updateProduct` / `addHistoryEntry`;
+      they already pass the number through.
+
+### Task 3: Decimal inputs in `app/warehouse/page.tsx`
+
+**Files:** Modify `app/warehouse/page.tsx`
+
+- [x] **Step 1:** Add a local `sanitizeQuantity(raw)` helper (digits + max one dot +
+      2 decimals). Import form `Số lượng`: keep `type="text"`, `inputMode="decimal"`,
+      state stays the raw string, `value={formData.quantity}`, `onChange` ->
+      `sanitizeQuantity(e.target.value)`.
+- [x] **Step 2:** Export quantity input: same raw-string state + sanitizer
+      (`useState('')`), `inputMode="decimal"`; keep the `<= 0` and `> tồn` guards,
+      converting with `const qty = Number(exportQuantity)` and rejecting `!(qty > 0)`.
+- [x] **Step 3:** Addmore quantity input: same raw-string state + sanitizer; convert
+      with `const qty = Number(addMoreQuantity)` and keep the `<= 0` alert.
+      Preview condition/rendering uses `Number(addMoreQuantity)` and `toFixed(2)`.
+- [x] **Step 4:** `handleConfirmExport`: subtraction uses `qty` and rounds with
+      `Number((foundProduct.quantity - qty).toFixed(2))`; guard write failure.
+- [x] **Step 5:** `handleConfirmAddMore`: addition uses `qty` and rounds with
+      `Number((addMoreProduct.quantity + qty).toFixed(2))`; guard write failure.
+- [x] **Step 6:** `handleSave` passes `quantity: Number(formData.quantity)` to
+      `createProduct` (and the history row), guarding a `null` result.
+- [x] **Step 7:** Do NOT touch the edit modal's disabled quantity or the table
+      `toLocaleString()` calls. The export summary `Tồn:` now uses `toLocaleString()`.
+
+### Task 4: Verify + commit
+
+- [x] **Step 1:** `npm run build` clean; re-read the diff for type slips (build ignores TS).
+- [x] **Step 2:** Grep `app/warehouse/page.tsx` for `[^0-9]` — only the replaced
+      quantity handlers should differ; weight filter untouched.
+- [ ] **Step 3:** Manual checklist from the spec: create `1.25`; export `0.5`; add
+      `0.75`; stock shows `1.5`; table / inventory total / history / print show the
+      decimal; `npm run build` passes. Requires running the Task 1 `ALTER` SQL first.
+      (Build passed; UI checklist needs the Supabase ALTER + a running app.)
+- [x] **Step 4:** Confirm no behavior changed beyond the spec; if it did, update
+      `docs/specs/warehouse.md` before finishing.
+- [x] **Step 5:** Commit: `git add supabase/schema.sql lib/db.ts app/warehouse/page.tsx docs/specs/warehouse.md docs/plans/warehouse.md`
+      -> `feat: allow 2-decimal product quantities`.
+
+### Review fix pass (post-review)
+- [x] Quantity inputs hold the raw string — a controlled number state rewrites `1.` back to `1`, so typing `1.3` produced `13`.
+- [x] `!(Number(x) > 0)` rejects a lone `.` / `NaN` before any write.
+- [x] `createProduct` / `updateProduct` failures now abort before the history row and success alert.
+- [x] Migration lines are commented with "run separately"; a full file re-run aborts at `CREATE POLICY`.
+- [x] `,` is accepted as a decimal separator (Vietnamese habit), avoiding `1,5` -> `15`.
+
+### Scope Guard
+- No changes to `lib/constants.ts`, `app/inventory/page.tsx`, `app/history/page.tsx`,
+  the print page, or seed data.
+- No new helper, dependency, or formatting change; display keeps `toLocaleString()`.
+- Input sanitation matches today's `Khối lượng` behavior (a second dot is ignored).

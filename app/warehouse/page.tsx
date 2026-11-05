@@ -18,6 +18,14 @@ const WAREHOUSES = [
   { id: 'kho-thuong-mai', name: 'Kho Thương Mại', icon: ShoppingBag, color: 'green' },
 ]
 
+// Số lượng: giữ chuỗi thô để gõ được dấu chấm, tối đa 2 chữ số thập phân
+function sanitizeQuantity(raw: string): string {
+  // Nhận cả dấu phẩy (người Việt hay gõ 1,5) để tránh nhập sai 10 lần
+  const [intPart, ...decimalParts] = raw.replace(/,/g, '.').replace(/[^0-9.]/g, '').split('.')
+  const decimals = decimalParts.join('').slice(0, 2)
+  return decimalParts.length ? `${intPart}.${decimals}` : intPart
+}
+
 export default function WarehousePage() {
   const [user, setUser] = useState<any>(null)
   const [selectedWarehouse, setSelectedWarehouse] = useState('kho-vat-tu')
@@ -30,7 +38,7 @@ export default function WarehousePage() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [exportCodeInput, setExportCodeInput] = useState('')
   const [foundProduct, setFoundProduct] = useState<Product | null>(null)
-  const [exportQuantity, setExportQuantity] = useState(0)
+  const [exportQuantity, setExportQuantity] = useState('')
   // Lý do xuất kho (bắt buộc) + lỗi đỏ inline cho số lượng / lý do
   const [exportReason, setExportReason] = useState('')
   const [exportQuantityError, setExportQuantityError] = useState('')
@@ -44,7 +52,7 @@ export default function WarehousePage() {
     name: '',
     categoryName: '',
     unit: '',
-    quantity: '' as any,
+    quantity: '',
     weight: '' as any,
     weightUnit: 'kg',
     location: '',
@@ -104,7 +112,7 @@ export default function WarehousePage() {
     if (!String(formData.name || '').trim()) errors.name = 'Vui lòng nhập tên hàng'
     if (hasCategory && !String(formData.categoryName || '').trim()) errors.categoryName = 'Vui lòng nhập danh mục'
     if (!String(formData.unit || '').trim()) errors.unit = 'Vui lòng nhập đơn vị tính'
-    if (formData.quantity === '' || formData.quantity === null || formData.quantity === undefined || Number(formData.quantity) <= 0) errors.quantity = 'Vui lòng nhập số lượng lớn hơn 0'
+    if (!(Number(formData.quantity) > 0)) errors.quantity = 'Vui lòng nhập số lượng lớn hơn 0'
     if (!weightUnknown) {
       if (formData.weight === '' || formData.weight === null || formData.weight === undefined || Number(formData.weight) <= 0) errors.weight = 'Vui lòng nhập khối lượng lớn hơn 0'
       if (!String(formData.weightUnit || '').trim()) errors.weightUnit = 'Vui lòng nhập đơn vị khối lượng'
@@ -117,7 +125,7 @@ export default function WarehousePage() {
   // Trạng thái nhập kho số lượng
   const [addMoreCodeInput, setAddMoreCodeInput] = useState('')
   const [addMoreProduct, setAddMoreProduct] = useState<Product | null>(null)
-  const [addMoreQuantity, setAddMoreQuantity] = useState(0)
+  const [addMoreQuantity, setAddMoreQuantity] = useState('')
 
   // File refs cho upload ảnh
   const [productImageFile, setProductImageFile] = useState<File | null>(null)
@@ -413,7 +421,7 @@ export default function WarehousePage() {
     setModalType('export')
     setExportCodeInput('')
     setFoundProduct(null)
-    setExportQuantity(0)
+    setExportQuantity('')
     setExportReason('')
     setExportQuantityError('')
     setExportReasonError('')
@@ -427,7 +435,7 @@ export default function WarehousePage() {
     setModalType('addmore')
     setAddMoreCodeInput('')
     setAddMoreProduct(null)
-    setAddMoreQuantity(0)
+    setAddMoreQuantity('')
     setIsModalOpen(true)
   }
 
@@ -438,10 +446,10 @@ export default function WarehousePage() {
     const product = products.find(p => p.code === upperCode)
     if (product) {
       setFoundProduct(product)
-      setExportQuantity(0)
+      setExportQuantity('')
     } else {
       setFoundProduct(null)
-      setExportQuantity(0)
+      setExportQuantity('')
     }
     // Đổi mã hàng = reset lý do + lỗi đỏ (tránh giữ lỗi của SP cũ)
     setExportReason('')
@@ -456,10 +464,10 @@ export default function WarehousePage() {
     const product = products.find(p => p.code === upperCode)
     if (product) {
       setAddMoreProduct(product)
-      setAddMoreQuantity(0)
+      setAddMoreQuantity('')
     } else {
       setAddMoreProduct(null)
-      setAddMoreQuantity(0)
+      setAddMoreQuantity('')
     }
   }
 
@@ -467,15 +475,17 @@ export default function WarehousePage() {
   const handleConfirmExport = async () => {
     if (!foundProduct) { alert('Không tìm thấy sản phẩm!'); return }
     // Số lượng xuất: bắt buộc, > 0, không vượt tồn (lỗi đỏ inline, không alert)
-    if (!exportQuantity || exportQuantity <= 0) { setExportQuantityError('Vui lòng nhập số lượng xuất lớn hơn 0!'); return }
-    if (exportQuantity > foundProduct.quantity) {
-      setExportQuantityError(`Số lượng tồn kho không đủ! Hiện có: ${foundProduct.quantity} ${foundProduct.unit}`)
+    const qty = Number(exportQuantity)
+    if (!(qty > 0)) { setExportQuantityError('Vui lòng nhập số lượng xuất lớn hơn 0!'); return }
+    if (qty > foundProduct.quantity) {
+      setExportQuantityError(`Số lượng tồn kho không đủ! Hiện có: ${foundProduct.quantity.toLocaleString()} ${foundProduct.unit}`)
       return
     }
     // Lý do xuất kho: bắt buộc (trống hoặc chỉ trắng = lỗi đỏ inline)
     if (!exportReason.trim()) { setExportReasonError('Vui lòng nhập lý do xuất kho!'); return }
     setIsSaving(true)
-    await updateProduct(foundProduct.id, { quantity: foundProduct.quantity - exportQuantity })
+    const updated = await updateProduct(foundProduct.id, { quantity: Number((foundProduct.quantity - qty).toFixed(2)) })
+    if (!updated) { alert('Lỗi cập nhật kho, vui lòng thử lại'); setIsSaving(false); return }
     await addHistoryEntry({
       date: new Date().toLocaleDateString('vi-VN'),
       time: new Date().toLocaleTimeString('vi-VN'),
@@ -484,10 +494,10 @@ export default function WarehousePage() {
       productName: foundProduct.name,
       userName: user?.name || user?.username || '',
       action: 'Xuất kho',
-      quantity: exportQuantity,
-      details: `Xuất ${exportQuantity} ${foundProduct.unit} — Lý do: ${exportReason.trim()}`,
+      quantity: qty,
+      details: `Xuất ${qty} ${foundProduct.unit} — Lý do: ${exportReason.trim()}`,
     })
-    alert(`Đã xuất ${exportQuantity} ${foundProduct.unit} ${foundProduct.name}`)
+    alert(`Đã xuất ${qty} ${foundProduct.unit} ${foundProduct.name}`)
     setIsModalOpen(false)
     setIsSaving(false)
     await loadProducts(selectedWarehouse)
@@ -496,10 +506,12 @@ export default function WarehousePage() {
   // Xác nhận nhập kho số lượng
   const handleConfirmAddMore = async () => {
     if (!addMoreProduct) { alert('Không tìm thấy sản phẩm!'); return }
-    if (addMoreQuantity <= 0) { alert('Số lượng nhập kho phải lớn hơn 0!'); return }
+    const qty = Number(addMoreQuantity)
+    if (!(qty > 0)) { alert('Số lượng nhập kho phải lớn hơn 0!'); return }
     setIsSaving(true)
-    const newQty = addMoreProduct.quantity + addMoreQuantity
-    await updateProduct(addMoreProduct.id, { quantity: newQty })
+    const newQty = Number((addMoreProduct.quantity + qty).toFixed(2))
+    const updated = await updateProduct(addMoreProduct.id, { quantity: newQty })
+    if (!updated) { alert('Lỗi cập nhật kho, vui lòng thử lại'); setIsSaving(false); return }
     await addHistoryEntry({
       date: new Date().toLocaleDateString('vi-VN'),
       time: new Date().toLocaleTimeString('vi-VN'),
@@ -508,10 +520,10 @@ export default function WarehousePage() {
       productName: addMoreProduct.name,
       userName: user?.name || user?.username || '',
       action: 'Nhập liệu',
-      quantity: addMoreQuantity,
-      details: `Nhập kho ${addMoreQuantity} ${addMoreProduct.unit} (tồn trước: ${addMoreProduct.quantity}, tồn sau: ${newQty})`,
+      quantity: qty,
+      details: `Nhập kho ${qty} ${addMoreProduct.unit} (tồn trước: ${addMoreProduct.quantity}, tồn sau: ${newQty})`,
     })
-    alert(`Đã nhập kho ${addMoreQuantity} ${addMoreProduct.unit} vào ${addMoreProduct.name}. Tồn kho mới: ${newQty}`)
+    alert(`Đã nhập kho ${qty} ${addMoreProduct.unit} vào ${addMoreProduct.name}. Tồn kho mới: ${newQty}`)
     setIsModalOpen(false)
     setIsSaving(false)
     await loadProducts(selectedWarehouse)
@@ -695,12 +707,14 @@ export default function WarehousePage() {
     }
 
     // Thêm sản phẩm mới
-    await createProduct({
+    const created = await createProduct({
       ...formData,
+      quantity: Number(formData.quantity),
       productImage: productImageUrl,
       locationImage: locationImageUrl,
       warehouseId: selectedWarehouse,
     })
+    if (!created) { alert('Lỗi lưu sản phẩm, vui lòng thử lại'); setIsSaving(false); return }
 
     // Log lịch sử nhập liệu
     await addHistoryEntry({
@@ -711,8 +725,8 @@ export default function WarehousePage() {
       productName: formData.name,
       userName: user?.name || user?.username || '',
       action: 'Nhập liệu',
-      quantity: Number(formData.quantity) || 0,
-      details: `Nhập ${formData.quantity} ${formData.unit}`,
+      quantity: Number(formData.quantity),
+      details: `Nhập ${Number(formData.quantity)} ${formData.unit}`,
     })
     setIsSaving(false)
     setIsModalOpen(false)
@@ -1025,9 +1039,9 @@ export default function WarehousePage() {
                     <label className="block text-sm font-medium text-gray-700 mb-1">Số lượng *</label>
                     <Input
                       type="text"
-                      inputMode="numeric"
-                      value={formData.quantity || ''}
-                      onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ''); setFormData({ ...formData, quantity: v ? parseInt(v) : '' as any }); clearFieldError('quantity') }}
+                      inputMode="decimal"
+                      value={formData.quantity}
+                      onChange={(e) => { setFormData({ ...formData, quantity: sanitizeQuantity(e.target.value) }); clearFieldError('quantity') }}
                       className={`border-2 ${formErrors.quantity ? 'border-red-500 bg-red-50 focus:ring-red-400' : ''}`}
                     />
                     {formErrors.quantity && (
@@ -1318,13 +1332,13 @@ export default function WarehousePage() {
                           <div className="space-y-4">
                             <div>
                               <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Số lượng xuất * (Tồn: {foundProduct.quantity} {foundProduct.unit})
+                                Số lượng xuất * (Tồn: {foundProduct.quantity.toLocaleString()} {foundProduct.unit})
                               </label>
                               <Input
                                 type="text"
-                                inputMode="numeric"
-                                value={exportQuantity || ''}
-                                onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ''); setExportQuantity(v ? parseInt(v) : 0); if (exportQuantityError) setExportQuantityError('') }}
+                                inputMode="decimal"
+                                value={exportQuantity}
+                                onChange={(e) => { setExportQuantity(sanitizeQuantity(e.target.value)); if (exportQuantityError) setExportQuantityError('') }}
                                 className={`border-2 text-lg ${exportQuantityError ? 'border-red-500 bg-red-50 focus:ring-red-400' : ''}`}
                               />
                               {exportQuantityError && (
@@ -1419,19 +1433,19 @@ export default function WarehousePage() {
                         </label>
                         <Input
                           type="text"
-                          inputMode="numeric"
-                          value={addMoreQuantity || ''}
-                          onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ''); setAddMoreQuantity(v ? parseInt(v) : 0) }}
-                          className="border-2 text-lg"
+                          inputMode="decimal"
+                          value={addMoreQuantity}
+                          onChange={(e) => setAddMoreQuantity(sanitizeQuantity(e.target.value))}
+                          className="bg-white border-2 text-lg"
                         />
                       </div>
 
-                      {addMoreQuantity > 0 && (
+                      {Number(addMoreQuantity) > 0 && (
                         <div className="mt-3 p-3 bg-green-50 rounded-lg border border-green-200">
                           <div className="flex justify-between items-center">
                             <span className="font-medium text-gray-700">Tồn kho sau khi nhập:</span>
                             <span className="text-xl font-bold text-green-600">
-                              {(addMoreProduct.quantity + addMoreQuantity).toLocaleString()} {addMoreProduct.unit}
+                              {Number((addMoreProduct.quantity + Number(addMoreQuantity)).toFixed(2)).toLocaleString()} {addMoreProduct.unit}
                             </span>
                           </div>
                         </div>

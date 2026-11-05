@@ -250,10 +250,59 @@ Shared shell via `components/sidebar.tsx`. All Supabase access via `lib/db.ts`.
   Xuất kho / Nhập kho modals, history page, or Excel export.
 - Files: `app/warehouse/page.tsx` (+ this spec, + plan).
 
+## Feature: Decimal Quantity (2 decimal places)
+- `Số lượng` is no longer integer-only. Users can type decimals such as `1.3`, `1.5`,
+  or `1.25` in every quantity input. Precision is **2 decimal places**, stored and
+  validated as such.
+- Database (`supabase/schema.sql`):
+  - `products.quantity` and `history_log.quantity` become `NUMERIC(12,2)`
+    (`DEFAULT 0`). Both must change: an export of `1.5` would fail against the old
+    integer `history_log.quantity`.
+  - Fresh installs: the two `CREATE TABLE` definitions use `NUMERIC(12,2)`.
+  - Existing DB: one-time `ALTER TABLE ... ALTER COLUMN quantity TYPE NUMERIC(12,2)
+    USING quantity::numeric` statements in the file's "MIGRATION 1 LẦN" section,
+    applied manually via the Supabase SQL Editor.
+- `lib/db.ts`: `mapProductFromDB` and `mapHistoryFromDB` map
+  `quantity: parseFloat(row.quantity) || 0` (same treatment as `weight`), so a
+  Postgres `numeric` returned as a string still becomes a JS number.
+- `app/warehouse/page.tsx`, three inputs — `Nhập Liệu` form `Số lượng`, `Xuất kho`
+  `Số lượng xuất`, and `Nhập Kho Số Lượng` `Số lượng nhập kho`:
+  - State holds the **raw string**, not a parsed number, so the decimal point is not
+    erased while typing (a controlled number input rewrites `1.` back to `1`).
+  - Local helper `sanitizeQuantity(raw)` converts `,` to `.` (Vietnamese decimal
+    habit), strips non-digits, collapses extra dots, and caps to 2 decimal places.
+    `inputMode` becomes `decimal`; `value` renders the raw string.
+  - Validation converts with `Number()` and requires `Number(x) > 0`, so a lone `.`
+    (`NaN`) cannot slip through. Messages unchanged: import
+    `Vui lòng nhập số lượng lớn hơn 0`, export the same plus
+    `Số lượng tồn kho không đủ! Hiện có: ...`, addmore
+    `Số lượng nhập kho phải lớn hơn 0!`.
+  - Stock arithmetic uses the converted number and rounds to 2 decimals:
+    `Number((foundProduct.quantity - qty).toFixed(2))` and
+    `Number((addMoreProduct.quantity + qty).toFixed(2))`, preventing floating-point
+    artifacts such as `0.30000000000000004`.
+  - If `updateProduct` / `createProduct` returns `false`/`null`, show
+    `Lỗi cập nhật kho, vui lòng thử lại` / `Lỗi lưu sản phẩm, vui lòng thử lại`,
+    and skip the history row + success alert.
+  - Display keeps the existing `toLocaleString()` calls (Vietnamese locale renders
+    `1,25`); the export summary `Tồn:` also uses `toLocaleString()` for consistency.
+- Edit modal `Số lượng (không thể sửa)` remains disabled and keeps
+  `quantity: editingProduct.quantity` — unchanged.
+- Out of scope: no changes to `app/inventory/page.tsx`, `app/history/page.tsx`,
+  the print page, `lib/constants.ts` (`quantity: number` already correct), seed
+  data, or validation messages. No new dependency; one local helper
+  (`sanitizeQuantity`).
+- Known limit: extra decimal places beyond 2 are dropped as typed (`1.234` becomes
+  `1.23`), not rounded up.
+- Manual checklist: create `1.25`; export `0.5`; add `0.75`; stock becomes
+  `1.5`; warehouse table, inventory total, and history/print all show the decimal;
+  `npm run build` passes.
+
 ## Validation Rules
 - Empty = `''`, `null`, `undefined`, or whitespace-only for strings.
 - `quantity` / `weight`: empty string counts as missing; `0` is treated as missing
   because quantity/weight must be > 0 to save (consistent with export/addmore `<= 0` guards).
+  `quantity` accepts decimals with up to 2 places (see Decimal Quantity feature).
 - `importDate`: required, `type="date"` input.
 
 ## Manual Test Checklist

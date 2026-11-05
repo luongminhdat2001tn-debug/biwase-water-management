@@ -318,7 +318,7 @@ function mapProductFromDB(row: any): Product {
     name: row.name || '',
     categoryName: row.category_name || '',
     unit: row.unit || '',
-    quantity: row.quantity || 0,
+    quantity: parseFloat(row.quantity) || 0,
     weight: parseFloat(row.weight) || 0,
     weightUnit: row.weight_unit || 'kg',
     location: row.location || '',
@@ -337,7 +337,7 @@ function mapHistoryFromDB(row: any): HistoryEntry {
     productName: row.product_name || '',
     userName: row.user_name || '',
     action: row.action || '',
-    quantity: row.quantity || 0,
+    quantity: parseFloat(row.quantity) || 0,
     details: row.details || '',
   }
 }

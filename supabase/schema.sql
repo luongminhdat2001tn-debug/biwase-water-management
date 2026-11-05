@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS products (
   code VARCHAR(50) NOT NULL,
   name VARCHAR(200) NOT NULL,
   unit VARCHAR(50) DEFAULT '',
-  quantity INTEGER DEFAULT 0,
+  quantity NUMERIC(12,2) DEFAULT 0,
   weight DECIMAL(10,2) DEFAULT 0,
   location VARCHAR(100) DEFAULT '',
   location_image_url TEXT,
@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS history_log (
   product_name VARCHAR(200),
   user_name VARCHAR(100),
   action VARCHAR(50),
-  quantity INTEGER DEFAULT 0,
+  quantity NUMERIC(12,2) DEFAULT 0,
   details TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -113,3 +113,13 @@ ON CONFLICT (username) DO NOTHING;
 -- ==========================================
 -- UPDATE accounts SET chuc_nang = array_replace(chuc_nang, 'kho-vat-tu-nha-may', 'kho-vat-tu');
 -- UPDATE accounts SET chuc_nang = array_replace(chuc_nang, 'kho-xay-dung-co-ban', 'kho-xay-dung');
+
+-- ==========================================
+-- MIGRATION 1 LẦN: Số lượng cho phép 2 chữ số thập phân
+-- Chạy 1 lần trong SQL Editor nếu DB đã tồn tại (CREATE TABLE IF NOT EXISTS
+-- không tự đổi kiểu cột đã có)
+-- ==========================================
+-- Bỏ comment 2 dòng dưới rồi chạy RIÊNG chúng trong SQL Editor
+-- (chạy lại cả file sẽ báo lỗi CREATE POLICY trùng và hủy cả batch)
+-- ALTER TABLE products ALTER COLUMN quantity TYPE NUMERIC(12,2) USING quantity::numeric;
+-- ALTER TABLE history_log ALTER COLUMN quantity TYPE NUMERIC(12,2) USING quantity::numeric;
