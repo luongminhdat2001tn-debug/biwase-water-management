@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Package, Plus, Edit2, Trash2, Search, X, Save, Warehouse, Factory, ShoppingBag, Building, Upload, LogIn, LogOut, FlaskConical, RefreshCw } from 'lucide-react'
 import { type Product, canAccessWarehouse } from '@/lib/constants'
-import { getProductsByWarehouse, createProduct, updateProduct, deleteProduct, addHistoryEntry, uploadImage, findProductByCodeInWarehouse, normalizeProductCode, findProductByNameInWarehouse } from '@/lib/db'
+import { getProductsByWarehouse, createProduct, updateProduct, deleteProduct, addHistoryEntry, uploadImage, deleteImage, findProductByCodeInWarehouse, normalizeProductCode, findProductByNameInWarehouse } from '@/lib/db'
 
 const WAREHOUSES = [
   { id: 'kho-vat-tu', name: 'Kho Vật Tư Nhà Máy', icon: Factory, color: 'blue' },
@@ -591,17 +591,19 @@ export default function WarehousePage() {
       return
     }
 
-    // Upload ảnh mới nếu có
+    // Upload ảnh mới nếu có; lỗi upload thì dừng để không lưu data URL vào DB
     let productImageUrl = editFormData.productImage
     let locationImageUrl = editFormData.locationImage
 
     if (editProductImageFile) {
       const url = await uploadImage(editProductImageFile, 'products')
-      if (url) productImageUrl = url
+      if (!url) { alert('❌ Upload ảnh sản phẩm thất bại! Vui lòng thử lại.'); setIsEditSaving(false); return }
+      productImageUrl = url
     }
     if (editLocationImageFile) {
       const url = await uploadImage(editLocationImageFile, 'locations')
-      if (url) locationImageUrl = url
+      if (!url) { alert('❌ Upload ảnh vị trí thất bại! Vui lòng thử lại.'); setIsEditSaving(false); return }
+      locationImageUrl = url
     }
 
     // Ghi lại chi tiết thay đổi
@@ -630,6 +632,13 @@ export default function WarehousePage() {
       return
     }
 
+    // Xóa ảnh cũ trên Storage khi đã thay ảnh mới hoặc gỡ ảnh (chỉ sau khi DB lưu thành công)
+    // best-effort: lỗi Storage không chặn ghi lịch sử / tải lại danh sách
+    const staleImages: string[] = []
+    if (editingProduct.productImage && editingProduct.productImage !== productImageUrl) staleImages.push(editingProduct.productImage)
+    if (editingProduct.locationImage && editingProduct.locationImage !== locationImageUrl) staleImages.push(editingProduct.locationImage)
+    await Promise.allSettled(staleImages.map(url => deleteImage(url)))
+
     // Log lịch sử
     await addHistoryEntry({
       date: new Date().toLocaleDateString('vi-VN'),
@@ -649,10 +658,13 @@ export default function WarehousePage() {
     alert('✅ Cập nhật sản phẩm thành công!')
   }
 
-  // Xóa sản phẩm (soft delete) + ghi lịch sử
+  // Xóa sản phẩm (soft delete) + xóa ảnh Storage + ghi lịch sử
   const handleDeleteProduct = async (product: Product) => {
     if (confirm(`Bạn có chắc chắn muốn xóa "${product.name}" khỏi tồn kho?`)) {
-      await deleteProduct(product.id)
+      const deleted = await deleteProduct(product.id)
+      if (!deleted) { alert('❌ Xóa sản phẩm thất bại! Vui lòng thử lại.'); return }
+      // best-effort: lỗi Storage không chặn ghi lịch sử / tải lại danh sách
+      await Promise.allSettled([deleteImage(product.productImage), deleteImage(product.locationImage)])
       await addHistoryEntry({
         date: new Date().toLocaleDateString('vi-VN'),
         time: new Date().toLocaleTimeString('vi-VN'),
@@ -742,6 +754,7 @@ export default function WarehousePage() {
       reader.onloadend = () => setEditFormData({ ...editFormData, productImage: reader.result as string })
       reader.readAsDataURL(file)
     }
+    e.target.value = ''
   }
 
   // Xử lý upload ảnh vị trí (modal SỬA SẢN PHẨM TỒN KHO)
@@ -753,6 +766,7 @@ export default function WarehousePage() {
       reader.onloadend = () => setEditFormData({ ...editFormData, locationImage: reader.result as string })
       reader.readAsDataURL(file)
     }
+    e.target.value = ''
   }
 
   // Xử lý upload ảnh vị trí
@@ -764,6 +778,7 @@ export default function WarehousePage() {
       reader.onloadend = () => { setFormData({ ...formData, locationImage: reader.result as string }) }
       reader.readAsDataURL(file)
     }
+    e.target.value = ''
   }
 
   // Xử lý upload ảnh sản phẩm
@@ -775,6 +790,7 @@ export default function WarehousePage() {
       reader.onloadend = () => { setFormData({ ...formData, productImage: reader.result as string }) }
       reader.readAsDataURL(file)
     }
+    e.target.value = ''
   }
 
   if (!user) {
@@ -1126,7 +1142,7 @@ export default function WarehousePage() {
                         <div className="relative">
                           <img src={formData.productImage} alt="Ảnh sản phẩm" className="w-24 h-24 object-cover rounded-lg border-2 border-blue-200" />
                           <button
-                            onClick={() => setFormData({ ...formData, productImage: '' })}
+                            onClick={() => { setFormData({ ...formData, productImage: '' }); setProductImageFile(null) }}
                             className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-600"
                           >
                             <X className="w-4 h-4" />
@@ -1151,7 +1167,7 @@ export default function WarehousePage() {
                         <div className="relative">
                           <img src={formData.locationImage} alt="Ảnh vị trí" className="w-24 h-24 object-cover rounded-lg border-2 border-gray-200" />
                           <button
-                            onClick={() => setFormData({ ...formData, locationImage: '' })}
+                            onClick={() => { setFormData({ ...formData, locationImage: '' }); setLocationImageFile(null) }}
                             className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-600"
                           >
                             <X className="w-4 h-4" />
@@ -1236,7 +1252,7 @@ export default function WarehousePage() {
                       {editFormData.productImage && (
                         <div className="relative">
                           <img src={editFormData.productImage} alt="Ảnh SP" className="w-24 h-24 object-cover rounded-lg border-2 border-blue-200" />
-                          <button onClick={() => setEditFormData({ ...editFormData, productImage: '' })} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-600"><X className="w-4 h-4" /></button>
+                          <button onClick={() => { setEditFormData({ ...editFormData, productImage: '' }); setEditProductImageFile(null) }} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-600"><X className="w-4 h-4" /></button>
                         </div>
                       )}
                     </div>
@@ -1251,7 +1267,7 @@ export default function WarehousePage() {
                       {editFormData.locationImage && (
                         <div className="relative">
                           <img src={editFormData.locationImage} alt="Ảnh vị trí" className="w-24 h-24 object-cover rounded-lg border-2" />
-                          <button onClick={() => setEditFormData({ ...editFormData, locationImage: '' })} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-600"><X className="w-4 h-4" /></button>
+                          <button onClick={() => { setEditFormData({ ...editFormData, locationImage: '' }); setEditLocationImageFile(null) }} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-600"><X className="w-4 h-4" /></button>
                         </div>
                       )}
                     </div>

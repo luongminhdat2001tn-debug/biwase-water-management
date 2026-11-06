@@ -298,6 +298,33 @@ Shared shell via `components/sidebar.tsx`. All Supabase access via `lib/db.ts`.
   `1.5`; warehouse table, inventory total, and history/print all show the decimal;
   `npm run build` passes.
 
+## Feature: Image Storage Cleanup (replace / remove / delete product)
+- Storage bucket `images`; reuses `deleteImage(url)` already in `lib/db.ts`. It ignores
+  empty / non-storage URLs and is best-effort: a storage error never blocks or reports a
+  failed DB save.
+- `Sửa Sản Phẩm Tồn Kho` (`handleSaveEdit`):
+  - If a chosen file's `uploadImage` returns `null`, abort with
+    `❌ Upload ảnh sản phẩm thất bại! Vui lòng thử lại.` /
+    `❌ Upload ảnh vị trí thất bại! Vui lòng thử lại.` (prevents persisting the `data:`
+    preview URL into the DB).
+  - After `updateProduct` returns `true`, delete each old URL when it is non-empty and
+    differs from the saved URL (`editingProduct.productImage` / `locationImage` vs the new
+    value). Covers BOTH replacing the image and clicking X to remove it. Unchanged URL or
+    failed save -> no storage delete.
+- X (remove preview) buttons in both modals also clear the pending `File` state
+  (`setProductImageFile(null)` / `setEditProductImageFile(null)` and the location
+  equivalents), so Save no longer re-uploads an image the user just removed.
+- `Nhập Liệu` is create-only and uploads only on save, so it has no stored old image to
+  delete; the X fix is its only change.
+- Product delete (`handleDeleteProduct`): only after `deleteProduct` returns `true`,
+  delete both of the product's image URLs, then write the history row and reload. On
+  failure show `❌ Xóa sản phẩm thất bại! Vui lòng thử lại.` and skip history/reload.
+- Accepted limits: soft-deleted rows keep their stale URL strings (nothing displays them
+  and there is no restore flow); a newly uploaded file is orphaned if `updateProduct`
+  fails or if the second of the two uploads fails; no schema, `lib/db.ts`, or
+  `lib/constants.ts` change.
+- Files: `app/warehouse/page.tsx` (+ this spec).
+
 ## Validation Rules
 - Empty = `''`, `null`, `undefined`, or whitespace-only for strings.
 - `quantity` / `weight`: empty string counts as missing; `0` is treated as missing
@@ -392,3 +419,17 @@ Shared shell via `components/sidebar.tsx`. All Supabase access via `lib/db.ts`.
 40. Closing and reopening either modal resets the box (Nhập Liệu unticked, Sửa derived
     from the product).
 41. `npm run build` passes.
+
+## Manual Test Checklist (Image Storage Cleanup)
+42. Sửa sản phẩm: upload ảnh SP mới -> save -> ảnh cũ biến mất khỏi bucket `images`,
+    DB trỏ ảnh mới; ảnh vị trí không đổi vẫn còn.
+43. Sửa sản phẩm: click X trên ảnh SP rồi `Cập Nhật` -> DB lưu ảnh rỗng, file cũ bị xóa;
+    mở lại modal thấy ô ảnh trống.
+44. Sửa sản phẩm: chọn ảnh mới rồi click X rồi `Cập Nhật` -> ảnh cũ bị xóa, KHÔNG upload
+    ảnh vừa chọn (không tạo file mới trong bucket).
+45. Sửa sản phẩm: giữ nguyên ảnh, chỉ đổi tên -> save -> file ảnh cũ vẫn còn trong bucket.
+46. Nhập Liệu: chọn ảnh rồi click X -> ô ảnh trống; save -> sản phẩm không có ảnh và
+    không có file nào được upload.
+47. Xóa sản phẩm có 2 ảnh -> confirm -> cả hai file bị xóa khỏi bucket, history row vẫn
+    được ghi; sản phẩm không có ảnh -> xóa bình thường, không lỗi.
+48. `npm run build` passes.
